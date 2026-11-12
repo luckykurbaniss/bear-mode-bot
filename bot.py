@@ -204,21 +204,41 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Оформление остановлено. Чтобы начать заново, нажмите /start.")
     return ConversationHandler.END
 
-def main():
+
+async def main():
     if not BOT_TOKEN:
         raise RuntimeError("Set BOT_TOKEN in your environment variables.")
+
     app = Application.builder().token(BOT_TOKEN).build()
 
     conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")],
+        entry_points=[
+            CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
+        ],
         states={
-            QUANTITY: [CallbackQueryHandler(quantity, pattern=r"^(qty_[1-4]|catalog)$")],
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
-            PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
-            ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_address)],
-            COMMENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_comment)],
-            CONFIRM: [CallbackQueryHandler(confirm, pattern=r"^(confirm|cancel)$")],
-            SET: [CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")],
+            QUANTITY: [
+                CallbackQueryHandler(
+                    quantity, pattern=r"^(qty_[1-4]|catalog)$"
+                )
+            ],
+            NAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)
+            ],
+            PHONE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)
+            ],
+            ADDRESS: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_address)
+            ],
+            COMMENT: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, get_comment)
+            ],
+            CONFIRM: [
+                CallbackQueryHandler(confirm, pattern=r"^(confirm|cancel)$")
+            ],
+            SET: [
+                CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel_command)],
         per_message=False,
@@ -227,15 +247,29 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(conv)
-    app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(catalog|delivery|contact|home)$"))
-    app.add_handler(CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$"))
-    print("BEAR MODE bot is running...")
+    app.add_handler(
+        CallbackQueryHandler(
+            menu_callback,
+            pattern=r"^(catalog|delivery|contact|home)$"
+        )
+    )
+    app.add_handler(
+        CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
+    )
 
-loop = asyncio.new_event_loop()
-asyncio.set_event_loop(loop)
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
 
-app.run_polling()
-    
+    print("BEAR MODE bot is running!")
+
+    try:
+        await asyncio.Event().wait()
+    finally:
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
+
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
