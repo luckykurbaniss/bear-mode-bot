@@ -234,10 +234,17 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_text += f"\n\nTelegram ID клиента: {user.id}"
 
     try:
+        items_text = f"{SETS[context.user_data['set_id']]['name']} × {context.user_data['quantity']}"
+        order_id = save_order(
+            user.id, context.user_data["name"], context.user_data["phone"],
+            context.user_data["address"], "", "", context.user_data["comment"],
+            items_text, context.user_data["total"]
+        )
+        admin_text = f"🧾 Номер заказа: №{order_id}\\n\\n" + admin_text
         await context.bot.send_message(
             chat_id=int(ADMIN_CHAT_ID),
             text=admin_text,
-            reply_markup=order_status_keyboard(user.id)
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
         )
 
         await q.edit_message_text(
@@ -255,39 +262,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
   
-
-async def admin_order_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Allow only the configured admin to change an order status and notify the customer."""
-    q = update.callback_query
-
-    if not ADMIN_CHAT_ID or update.effective_user.id != int(ADMIN_CHAT_ID):
-        await q.answer("Нет доступа к изменению статуса заказа.", show_alert=True)
-        return
-
-    try:
-        _, status_key, customer_chat_id = q.data.split(":", 2)
-        status_label, customer_message = ORDER_STATUSES[status_key]
-        customer_chat_id = int(customer_chat_id)
-    except (ValueError, KeyError, TypeError):
-        await q.answer("Не удалось распознать статус заказа.", show_alert=True)
-        return
-
-    marker = "\n\n📌 Статус:"
-    current_text = q.message.text or ""
-    order_text = current_text.split(marker, 1)[0]
-    updated_text = f"{order_text}{marker} {status_label}"
-
-    await q.edit_message_text(
-        text=updated_text,
-        reply_markup=order_status_keyboard(customer_chat_id)
-    )
-    await q.answer("Статус обновлён")
-
-    try:
-        await context.bot.send_message(chat_id=customer_chat_id, text=customer_message)
-    except Exception:
-        log.exception("Could not notify customer about order status")
-
 
 
 async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -350,10 +324,19 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if user:
             admin_text += f"\n\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
 
+        items_text = ", ".join(
+            f"{SETS[str(entry['id'])]['name']} × {int(entry['quantity'])}"
+            for entry in items
+        )
+        order_id = save_order(
+            user.id if user else None, customer_name, phone, address,
+            delivery_date, delivery_time, comment, items_text, total
+        )
+        admin_text = f"🧾 Номер заказа: №{order_id}\\n\\n" + admin_text
         await context.bot.send_message(
             chat_id=int(ADMIN_CHAT_ID),
             text=admin_text,
-            reply_markup=order_status_keyboard(user.id)
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
         )
         await message.reply_text(
             "🎉 Заказ отправлен! Спасибо!\n"
@@ -419,8 +402,10 @@ async def main():
     )
 
     app.add_handler(CommandHandler("start", start))
+    init_db()
     app.add_handler(CommandHandler("myid", myid))
-    app.add_handler(CallbackQueryHandler(admin_order_status, pattern=r"^bmst:"))
+    app.add_handler(CommandHandler("admin", admin_command))
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(conv)
     app.add_handler(
