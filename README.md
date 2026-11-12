@@ -16,7 +16,7 @@
 3. Задайте переменные окружения:
    - `BOT_TOKEN` — токен от @BotFather.
    - `ADMIN_CHAT_ID` — ваш числовой Telegram chat ID (узнать командой `/myid`).
-   - `WEB_APP_URL` — адрес опубликованного сайта; по умолчанию `https://luckykurbaniss.github.io/`.
+   - `WEB_APP_URL` — адрес опубликованного сайта; по умолчанию `https://luckykurbaniss.github.io/bear-mode-bot/`.
 4. Запустите:
    `python bot.py`
 
