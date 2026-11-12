@@ -259,7 +259,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_order_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Allow only the configured admin to change an order status and notify the customer."""
     q = update.callback_query
-    await q.answer()
 
     if not ADMIN_CHAT_ID or update.effective_user.id != int(ADMIN_CHAT_ID):
         await q.answer("Нет доступа к изменению статуса заказа.", show_alert=True)
@@ -282,6 +281,7 @@ async def admin_order_status(update: Update, context: ContextTypes.DEFAULT_TYPE)
         text=updated_text,
         reply_markup=order_status_keyboard(customer_chat_id)
     )
+    await q.answer("Статус обновлён")
 
     try:
         await context.bot.send_message(chat_id=customer_chat_id, text=customer_message)
