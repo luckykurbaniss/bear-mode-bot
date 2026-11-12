@@ -1,7 +1,8 @@
 import asyncio
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import json
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
@@ -15,6 +16,7 @@ log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/").strip()
 
 SETS = {
     "1": {
@@ -41,6 +43,7 @@ SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
 def main_keyboard():
     return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))],
         [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
         [InlineKeyboardButton("📦 Как работает доставка", callback_data="delivery")],
         [InlineKeyboardButton("☎️ Связаться", callback_data="contact")],
@@ -221,6 +224,85 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
   
 
+async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Receive an order submitted by the BEAR MODE website via Telegram Web App."""
+    message = update.effective_message
+    if not message or not message.web_app_data:
+        return
+
+    try:
+        order = json.loads(message.web_app_data.data)
+        if order.get("type") != "bear_mode_order":
+            raise ValueError("Unknown order type")
+
+        customer_name = str(order.get("customer_name", "")).strip()
+        phone = str(order.get("phone", "")).strip()
+        address = str(order.get("address", "")).strip()
+        delivery_date = str(order.get("delivery_date", "")).strip()
+        delivery_time = str(order.get("delivery_time", "")).strip()
+        comment = str(order.get("comment", "")).strip()
+        items = order.get("items", [])
+
+        if not all([customer_name, phone, address, delivery_date, delivery_time]):
+            raise ValueError("Required customer or delivery fields are missing")
+        if not isinstance(items, list) or not items:
+            raise ValueError("The order has no items")
+
+        lines = []
+        total = 0
+        for entry in items:
+            set_id = str(entry.get("id", ""))
+            if set_id not in SETS:
+                raise ValueError("Unknown set")
+            quantity = int(entry.get("quantity", 0))
+            if quantity < 1 or quantity > 100:
+                raise ValueError("Invalid quantity")
+            line_total = quantity * PRICE
+            total += line_total
+            lines.append(f"🍱 {SETS[set_id]['name']} × {quantity} — {line_total:,} ₫".replace(",", "."))
+
+        if not ADMIN_CHAT_ID:
+            await message.reply_text(
+                "Заказ заполнен, но уведомления владельцу ещё не настроены. "
+                "Пожалуйста, напишите @lucky_ranger."
+            )
+            log.error("Web App order received but ADMIN_CHAT_ID is not configured")
+            return
+
+        user = update.effective_user
+        admin_text = (
+            "🐻 НОВЫЙ ЗАКАЗ С САЙТА BEAR MODE!\\n\\n"
+            + "\\n".join(lines)
+            + f"\\n\\n💰 Итого за сеты: {total:,} ₫".replace(",", ".")
+            + f"\\n\\n👤 Имя: {customer_name}"
+            + f"\\n📱 Телефон: {phone}"
+            + f"\\n📍 Адрес: {address}"
+            + f"\\n📅 Дата доставки: {delivery_date}"
+            + f"\\n🕒 Время доставки: {delivery_time}"
+            + f"\\n💬 Комментарий: {comment or 'Нет'}"
+        )
+        if user:
+            admin_text += f"\\n\\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
+
+        await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=admin_text)
+        await message.reply_text(
+            "🎉 Заказ отправлен! Спасибо!\\n"
+            "Мы скоро свяжемся с вами для подтверждения доставки."
+        )
+
+    except (ValueError, TypeError, json.JSONDecodeError):
+        log.exception("Invalid order received from website")
+        await message.reply_text(
+            "Не удалось обработать заказ. Проверьте данные и попробуйте ещё раз "
+            "или напишите @lucky_ranger."
+        )
+    except Exception:
+        log.exception("Failed to forward website order")
+        await message.reply_text(
+            "Не удалось отправить заказ автоматически. Пожалуйста, напишите @lucky_ranger."
+        )
+
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Оформление остановлено. Чтобы начать заново, нажмите /start.")
@@ -268,6 +350,7 @@ async def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(conv)
     app.add_handler(
         CallbackQueryHandler(
