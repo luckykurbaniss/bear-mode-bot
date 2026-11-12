@@ -297,17 +297,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     context.user_data["welcome_message_id"] = welcome.message_id
     context.user_data["welcome_chat_id"] = welcome.chat_id
-    prompt = await update.message.reply_text(
-        "Открыть полный каталог:",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
-            resize_keyboard=True,
-            one_time_keyboard=False,
-            is_persistent=True
-        )
+    # Keep exactly one launch prompt per chat. Reuse the existing message on
+    # repeated /start instead of stacking duplicate "open shop" messages.
+    prompt_id = context.chat_data.get("catalog_prompt_message_id")
+    chat_id = update.effective_chat.id
+    prompt_markup = ReplyKeyboardMarkup(
+        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        resize_keyboard=True,
+        one_time_keyboard=False,
+        is_persistent=True
     )
-    context.user_data["catalog_prompt_message_id"] = prompt.message_id
-    context.user_data["catalog_prompt_chat_id"] = prompt.chat_id
+    prompt = None
+    if prompt_id:
+        try:
+            prompt = await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=prompt_id,
+                text="Открыть полный каталог:",
+                reply_markup=prompt_markup
+            )
+        except Exception:
+            prompt = None
+    if not prompt:
+        prompt = await update.message.reply_text(
+            "Открыть полный каталог:",
+            reply_markup=prompt_markup
+        )
+    context.chat_data["catalog_prompt_message_id"] = prompt.message_id
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
