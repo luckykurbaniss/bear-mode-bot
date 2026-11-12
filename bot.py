@@ -599,6 +599,9 @@ async def main():
         states={
             QUANTITY: [
                 CallbackQueryHandler(
+                    menu_callback, pattern=r"^home$"
+                ),
+                CallbackQueryHandler(
                     quantity, pattern=r"^(qty_[1-4]|catalog)$"
                 )
             ],
