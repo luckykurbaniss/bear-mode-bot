@@ -287,7 +287,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🌐 Кнопка полного каталога находится внизу экрана.",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
-            resize_keyboard=True
+            resize_keyboard=True,
+            one_time_keyboard=True
         )
     )
     return ConversationHandler.END
