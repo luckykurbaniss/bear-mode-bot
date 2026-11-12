@@ -621,6 +621,9 @@ async def main():
                 CallbackQueryHandler(confirm, pattern=r"^(confirm|cancel)$")
             ],
             SET: [
+                CallbackQueryHandler(
+                    menu_callback, pattern=r"^home$"
+                ),
                 CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
             ],
         },
