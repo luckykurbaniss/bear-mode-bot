@@ -169,51 +169,57 @@ async def get_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return CONFIRM
 
+
 async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+
     if q.data == "cancel":
-        await q.edit_message_text("Заказ отменён. Если захотите заказать — нажмите /start.")
+        await q.edit_message_text(
+            "Заказ отменён. Если захотите заказать — нажмите /start."
+        )
         return ConversationHandler.END
 
     if not ADMIN_CHAT_ID:
         await q.edit_message_text(
-            "Спасибо! Заказ заполнен, но бот ещё не подключён к получателю заказов. "
-            "Пожалуйста, напишите @lucky_ranger напрямую. Администратору нужно настроить ADMIN_CHAT_ID."
+            "Заказ заполнен, но получатель заказов не настроен. "
+            "Напишите @lucky_ranger."
         )
-        log.warning("ADMIN_CHAT_ID is not configured; order was not forwarded.")
         return ConversationHandler.END
 
-    
-user = update.effective_user
+    user = update.effective_user
 
-admin_text = (
-    "🐻 НОВЫЙ ЗАКАЗ BEAR MODE!\n\n"
-    + context.user_data.get("summary", "").replace("*", "")
-)
-
-if user.username:
-    admin_text += f"\n\nTelegram клиента: @{user.username}"
-else:
-    admin_text += f"\n\nTelegram ID клиента: {user.id}"
-
-try:
-    await context.bot.send_message(
-        chat_id=int(ADMIN_CHAT_ID),
-        text=admin_text
+    admin_text = (
+        "🐻 НОВЫЙ ЗАКАЗ BEAR MODE!\n\n"
+        + context.user_data.get("summary", "").replace("*", "")
     )
-    await q.edit_message_text(
-        "🎉 Заказ отправлен! Спасибо!\n\n"
-        "Мы скоро свяжемся с вами для подтверждения доставки."
-    )
-except Exception:
-    log.exception("Failed to forward order")
-    await q.edit_message_text(
-        "Не удалось отправить заказ автоматически. "
-        "Пожалуйста, напишите @lucky_ranger."
-    )
-return ConversationHandler.END
 
+    if user.username:
+        admin_text += f"\n\nTelegram клиента: @{user.username}"
+    else:
+        admin_text += f"\n\nTelegram ID клиента: {user.id}"
+
+    try:
+        await context.bot.send_message(
+            chat_id=int(ADMIN_CHAT_ID),
+            text=admin_text
+        )
+
+        await q.edit_message_text(
+            "🎉 Заказ отправлен! Спасибо!\n\n"
+            "Мы скоро свяжемся с вами для подтверждения доставки."
+        )
+
+    except Exception:
+        log.exception("Failed to forward order")
+        await q.edit_message_text(
+            "Не удалось отправить заказ автоматически. "
+            "Пожалуйста, напишите @lucky_ranger."
+        )
+
+    return ConversationHandler.END
+
+  
 
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
