@@ -25,8 +25,16 @@
 <form id="orderForm"><label>Ваше имя</label><input id="name" required maxlength="80" placeholder="Как к вам обращаться?"><label>Телефон</label><input id="phone" type="tel" required maxlength="30" placeholder="+84 ..."><label>Адрес доставки в Нячанге</label><textarea id="address" required maxlength="400" placeholder="Район, улица, дом, квартира"></textarea><label>Дата доставки</label><input id="date" type="date" required><label>Комментарий к заказу</label><textarea id="comment" maxlength="500" placeholder="Например: позвонить при доставке"></textarea><button class="btn primary" type="submit">🐼 Отправить заказ</button><p class="note">После отправки заказ поступит администратору BEAR MODE в Telegram. Мы свяжемся с вами для подтверждения деталей и стоимости доставки.</p></form></section></div><div class="toast" id="toast"></div>
 <script>
 const tg=window.Telegram?.WebApp;
-// Tell Telegram immediately that the Mini App is ready; don't wait for images.
-
+// Expand the shop whenever Telegram opens it or restores a smaller viewport.
+if(tg){
+  tg.ready();
+  tg.expand();
+  tg.setHeaderColor?.('#111111');
+  tg.setBackgroundColor?.('#101010');
+  tg.onEvent?.('viewportChanged',()=>{
+    if(!tg.isExpanded) tg.expand();
+  });
+}
 const PRICE=170000;
 const sets=[
 {id:'1',name:'Сет 1',tag:'Энергия',photo:'assets/set1.jpg',items:[['Гречка с грибами','35'],['Куриная грудка','100'],['Овощной салат','70'],['Яйцо отварное','10'],['Мини-банан','5'],['Морс','15'],['Багет','15']]},
@@ -45,7 +53,7 @@ $('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Снача
 let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('date').min=local;$('date').value=local;
 $('orderForm').onsubmit=e=>{e.preventDefault();if(!Object.keys(cart).length)return toast('Корзина пуста');const order={type:'bear_mode_order',items:sets.filter(s=>cart[s.id]).map(s=>({id:s.id,name:s.name,quantity:cart[s.id],unit_price:PRICE,composition:s.items})),total:Object.values(cart).reduce((a,b)=>a+b,0)*PRICE,customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim()};if(!tg||typeof tg.sendData!=='function'){toast('Открой меню через кнопку в Telegram-боте, чтобы отправить заказ.');return}try{tg.sendData(JSON.stringify(order));toast('Заказ отправлен! Спасибо 🐻')}catch(err){toast('Не удалось отправить. Напишите @lucky_ranger')} };
 render();update();
-if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#111111');tg.setBackgroundColor?.('#101010')}
+
 if('serviceWorker' in navigator && location.protocol==='https:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}),{once:true})}
 
 </script></body></html>
