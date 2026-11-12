@@ -271,22 +271,22 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
 
         user = update.effective_user
         admin_text = (
-            "🐻 НОВЫЙ ЗАКАЗ С САЙТА BEAR MODE!\\n\\n"
-            + "\\n".join(lines)
-            + f"\\n\\n💰 Итого за сеты: {total:,} ₫".replace(",", ".")
-            + f"\\n\\n👤 Имя: {customer_name}"
-            + f"\\n📱 Телефон: {phone}"
-            + f"\\n📍 Адрес: {address}"
-            + f"\\n📅 Дата доставки: {delivery_date}"
-            + f"\\n🕒 Время доставки: {delivery_time}"
-            + f"\\n💬 Комментарий: {comment or 'Нет'}"
+            "🐻 НОВЫЙ ЗАКАЗ С САЙТА BEAR MODE!\n\n"
+            + "\n".join(lines)
+            + f"\n\n💰 Итого за сеты: {total:,} ₫".replace(",", ".")
+            + f"\n\n👤 Имя: {customer_name}"
+            + f"\n📱 Телефон: {phone}"
+            + f"\n📍 Адрес: {address}"
+            + f"\n📅 Дата доставки: {delivery_date}"
+            + f"\n🕒 Время доставки: {delivery_time}"
+            + f"\n💬 Комментарий: {comment or 'Нет'}"
         )
         if user:
-            admin_text += f"\\n\\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
+            admin_text += f"\n\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
 
         await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=admin_text)
         await message.reply_text(
-            "🎉 Заказ отправлен! Спасибо!\\n"
+            "🎉 Заказ отправлен! Спасибо!\n"
             "Мы скоро свяжемся с вами для подтверждения доставки."
         )
 
