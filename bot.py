@@ -283,7 +283,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    await update.message.reply_text(
+    prompt = await update.message.reply_text(
         "Открыть полный каталог:",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
@@ -291,6 +291,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             one_time_keyboard=True
         )
     )
+    context.user_data["catalog_prompt_message_id"] = prompt.message_id
+    context.user_data["catalog_prompt_chat_id"] = prompt.chat_id
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -300,9 +302,20 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+async def remove_catalog_prompt(context, user_data):
+    message_id = user_data.pop("catalog_prompt_message_id", None)
+    chat_id = user_data.pop("catalog_prompt_chat_id", None)
+    if message_id and chat_id:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            log.debug("Catalog prompt already removed or cannot be deleted")
+
+
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    await remove_catalog_prompt(context, context.user_data)
     data = q.data
     if data == "home":
         await q.edit_message_text(
@@ -332,6 +345,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    await remove_catalog_prompt(context, context.user_data)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
@@ -463,6 +477,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Receive an order submitted by the BEAR MODE website via Telegram Web App."""
+    await remove_catalog_prompt(context, context.user_data)
     message = update.effective_message
     if not message or not message.web_app_data:
         return
