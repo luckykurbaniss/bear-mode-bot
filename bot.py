@@ -281,7 +281,7 @@ def catalog_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Delete the previous one-off catalog prompt before sending a fresh one.
     # This prevents duplicate "Open menu and order" messages after repeated /start.
-    await remove_catalog_prompt(context, context.user_data)
+    await remove_catalog_prompt(context)
     context.user_data.clear()
     text = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
@@ -297,33 +297,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     context.user_data["welcome_message_id"] = welcome.message_id
     context.user_data["welcome_chat_id"] = welcome.chat_id
-    # Keep exactly one launch prompt per chat. Reuse the existing message on
-    # repeated /start instead of stacking duplicate "open shop" messages.
-    prompt_id = context.chat_data.get("catalog_prompt_message_id")
-    chat_id = update.effective_chat.id
-    prompt_markup = ReplyKeyboardMarkup(
-        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
-        resize_keyboard=True,
-        one_time_keyboard=False,
-        is_persistent=True
-    )
-    prompt = None
-    if prompt_id:
-        try:
-            prompt = await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=prompt_id,
-                text="Открыть полный каталог:",
-                reply_markup=prompt_markup
-            )
-        except Exception:
-            prompt = None
-    if not prompt:
-        prompt = await update.message.reply_text(
-            "Открыть полный каталог:",
-            reply_markup=prompt_markup
-        )
-    context.chat_data["catalog_prompt_message_id"] = prompt.message_id
+    # Show one launch prompt after /start.
+    await show_catalog_prompt(context, update.effective_chat.id)
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -333,13 +308,11 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def remove_catalog_prompt(context, user_data):
-    # Remove only the separate Web App prompt. The welcome message is reused
-    # by inline buttons and must stay in chat so it can be edited into the catalog.
-    message_id = user_data.pop("catalog_prompt_message_id", None)
-    chat_id = user_data.pop("catalog_prompt_chat_id", None)
-    user_data.pop("welcome_message_id", None)
-    user_data.pop("welcome_chat_id", None)
+async def remove_catalog_prompt(context, user_data=None):
+    # The launch prompt is tracked per chat (not per user_data) so it is
+    # consistently removed/restored across menu navigation and repeated /start.
+    message_id = context.chat_data.pop("catalog_prompt_message_id", None)
+    chat_id = context.chat_data.pop("catalog_prompt_chat_id", None)
     if message_id and chat_id:
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -347,26 +320,50 @@ async def remove_catalog_prompt(context, user_data):
             log.debug("Catalog prompt already removed or cannot be deleted")
 
 
+async def show_catalog_prompt(context, chat_id):
+    # Never create a second prompt if one is already present.
+    message_id = context.chat_data.get("catalog_prompt_message_id")
+    if message_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id, message_id=message_id,
+                text="Открыть полный каталог:"
+            )
+            return
+        except Exception:
+            context.chat_data.pop("catalog_prompt_message_id", None)
+            context.chat_data.pop("catalog_prompt_chat_id", None)
+
+    markup = ReplyKeyboardMarkup(
+        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        resize_keyboard=True, one_time_keyboard=False, is_persistent=True
+    )
+    prompt = await context.bot.send_message(
+        chat_id=chat_id, text="Открыть полный каталог:", reply_markup=markup
+    )
+    context.chat_data["catalog_prompt_message_id"] = prompt.message_id
+    context.chat_data["catalog_prompt_chat_id"] = chat_id
+
+
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     data = q.data
     if data == "home":
-        # Fully reset the unfinished catalog/order flow before showing the main menu.
-        prompt_id = context.user_data.get("catalog_prompt_message_id")
-        prompt_chat_id = context.user_data.get("catalog_prompt_chat_id")
+        # Restore the single catalog prompt only when returning to the main menu.
         context.user_data.clear()
-        if prompt_id and prompt_chat_id:
-            context.user_data["catalog_prompt_message_id"] = prompt_id
-            context.user_data["catalog_prompt_chat_id"] = prompt_chat_id
         await q.edit_message_text(
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-    elif data == "catalog":
-        await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
-    elif data == "delivery":
-        await q.edit_message_text(
+        await show_catalog_prompt(context, update.effective_chat.id)
+    elif data in ("catalog", "delivery", "contact"):
+        # Hide the separate catalog prompt while the customer is inside a section.
+        await remove_catalog_prompt(context)
+        if data == "catalog":
+            await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
+        elif data == "delivery":
+            await q.edit_message_text(
             "🚚 *Доставка BEAR MODE*\n\n"
             "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\n"
             "Нажми «Выбрать сет», чтобы оформить заказ.",
@@ -375,12 +372,12 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
                 [InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]
             ])
-        )
-    elif data == "contact":
-        await q.edit_message_text(
-            "☎️ Чтобы задать вопрос по заказу, напиши владельцу канала: @lucky_ranger",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
-        )
+            )
+        else:
+            await q.edit_message_text(
+                "☎️ Чтобы задать вопрос по заказу, напиши владельцу канала: @lucky_ranger",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
+            )
     return ConversationHandler.END
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -388,12 +385,8 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
-    prompt_id = context.user_data.get("catalog_prompt_message_id")
-    prompt_chat_id = context.user_data.get("catalog_prompt_chat_id")
+    await remove_catalog_prompt(context)
     context.user_data.clear()
-    if prompt_id and prompt_chat_id:
-        context.user_data["catalog_prompt_message_id"] = prompt_id
-        context.user_data["catalog_prompt_chat_id"] = prompt_chat_id
     context.user_data["set_id"] = set_id
     await q.edit_message_text(
         f"🍱 *{item['name']}*\n\n{item['items']}\n\nЦена: *170.000 ₫*\n\nСколько порций заказать?",
