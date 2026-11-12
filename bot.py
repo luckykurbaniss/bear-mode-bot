@@ -2,6 +2,8 @@ import asyncio
 import os
 import logging
 import json
+import sqlite3
+from datetime import datetime
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
     KeyboardButton, ReplyKeyboardMarkup
@@ -20,6 +22,7 @@ log = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
+DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 
 SETS = {
     "1": {
@@ -49,6 +52,194 @@ ORDER_STATUSES = {
     "delivered": ("🎉 Доставлен", "Ваш заказ BEAR MODE отмечен как доставленный. Приятного аппетита!"),
     "cancelled": ("❌ Отменён", "К сожалению, ваш заказ BEAR MODE отменён. Если это ошибка, напишите нам @lucky_ranger."),
 }
+
+
+def db_connect():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with db_connect() as conn:
+        conn.execute("""CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            customer_chat_id INTEGER,
+            customer_name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            address TEXT NOT NULL,
+            delivery_date TEXT,
+            delivery_time TEXT,
+            comment TEXT,
+            items_text TEXT NOT NULL,
+            total INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'new'
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
+
+
+def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total):
+    with db_connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO orders
+            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')""",
+            (datetime.now().astimezone().isoformat(timespec="seconds"), customer_chat_id,
+             customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total)
+        )
+        return cur.lastrowid
+
+
+def get_order(order_id):
+    with db_connect() as conn:
+        return conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+
+
+def get_orders(status="all", limit=8, offset=0):
+    with db_connect() as conn:
+        if status != "all":
+            return conn.execute("SELECT * FROM orders WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                                (status, limit, offset)).fetchall()
+        return conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT ? OFFSET ?",
+                            (limit, offset)).fetchall()
+
+
+def get_order_stats():
+    today = datetime.now().astimezone().date().isoformat()
+    with db_connect() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+        today_count, today_revenue = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(total),0) FROM orders WHERE substr(created_at,1,10)=? AND status!='cancelled'",
+            (today,)
+        ).fetchone()
+        revenue = conn.execute(
+            "SELECT COALESCE(SUM(total),0) FROM orders WHERE status IN ('confirmed','cooking','courier','delivered')"
+        ).fetchone()[0]
+        new_count = conn.execute("SELECT COUNT(*) FROM orders WHERE status='new'").fetchone()[0]
+    return total, today_count, today_revenue, revenue, new_count
+
+
+def set_order_status(order_id, status):
+    with db_connect() as conn:
+        conn.execute("UPDATE orders SET status=? WHERE id=?", (status, order_id))
+
+
+def admin_only(update):
+    return bool(ADMIN_CHAT_ID) and update.effective_user and str(update.effective_user.id) == ADMIN_CHAT_ID
+
+
+def admin_menu_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🆕 Новые заказы", callback_data="adm:list:new:0"),
+         InlineKeyboardButton("📋 Все заказы", callback_data="adm:list:all:0")],
+        [InlineKeyboardButton("📊 Статистика и выручка", callback_data="adm:stats")]
+    ])
+
+
+def admin_order_keyboard(order_id, status):
+    buttons = [InlineKeyboardButton(label, callback_data=f"adm:set:{order_id}:{key}")
+               for key, (label, _) in ORDER_STATUSES.items() if key != status]
+    rows = [buttons[i:i+2] for i in range(0, len(buttons), 2)]
+    rows.append([InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")])
+    return InlineKeyboardMarkup(rows)
+
+
+def order_card_text(order):
+    label = ORDER_STATUSES.get(order["status"], (order["status"], ""))[0]
+    return (
+        f"🐻 *ЗАКАЗ BEAR MODE №{order['id']}*\\n\\n"
+        f"📌 Статус: {label}\\n"
+        f"🕒 Создан: {order['created_at']}\\n"
+        f"👤 Имя: {order['customer_name']}\\n"
+        f"📱 Телефон: {order['phone']}\\n"
+        f"📍 Адрес: {order['address']}\\n"
+        f"📅 Доставка: {order['delivery_date'] or 'не указана'} {order['delivery_time'] or ''}\\n"
+        f"🍱 Заказ: {order['items_text']}\\n"
+        f"💰 Сумма: {order['total']:,} ₫\\n"
+        f"💬 Комментарий: {order['comment'] or 'Нет'}"
+    ).replace(",", ".")
+
+
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not admin_only(update):
+        await update.message.reply_text("⛔ Эта панель доступна только администратору.")
+        return
+    await update.message.reply_text("🐻 *BEAR MODE — панель управления*",
+                                    parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+
+
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if not admin_only(update):
+        await q.answer("Нет доступа.", show_alert=True)
+        return
+    parts = q.data.split(":")
+    if parts[1] == "stats":
+        total, today_count, today_revenue, revenue, new_count = get_order_stats()
+        text = ("📊 *СТАТИСТИКА BEAR MODE*\\n\\n"
+                f"🧾 Всего заказов: *{total}*\\n"
+                f"🆕 Новых: *{new_count}*\\n"
+                f"📅 Заказов сегодня: *{today_count}*\\n"
+                f"💵 Сумма заказов сегодня: *{today_revenue:,} ₫*\\n"
+                f"💰 Выручка по подтверждённым: *{revenue:,} ₫*\\n\\n"
+                "_В выручку включены подтверждённые, готовящиеся, переданные курьеру и доставленные заказы._").replace(",", ".")
+        await q.edit_message_text(text, parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")]]))
+        await q.answer()
+    elif parts[1] == "home":
+        await q.edit_message_text("🐻 *BEAR MODE — панель управления*",
+                                  parse_mode="Markdown", reply_markup=admin_menu_keyboard())
+        await q.answer()
+    elif parts[1] == "list":
+        status, page = parts[2], int(parts[3])
+        orders = get_orders(status, 8, page * 8)
+        rows = []
+        for order in orders:
+            label = ORDER_STATUSES.get(order["status"], (order["status"],))[0]
+            rows.append([InlineKeyboardButton(f"№{order['id']} · {order['customer_name'][:16]} · {label}",
+                                               callback_data=f"adm:order:{order['id']}")])
+        nav = []
+        if page > 0:
+            nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"adm:list:{status}:{page-1}"))
+        if len(orders) == 8:
+            nav.append(InlineKeyboardButton("Далее ➡️", callback_data=f"adm:list:{status}:{page+1}"))
+        if nav:
+            rows.append(nav)
+        rows.append([InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")])
+        title = "🆕 *НОВЫЕ ЗАКАЗЫ*" if status == "new" else "📋 *ВСЕ ЗАКАЗЫ*"
+        await q.edit_message_text(title if orders else title + "\\n\\nЗаказов пока нет.",
+                                  parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
+        await q.answer()
+    elif parts[1] == "order":
+        order = get_order(int(parts[2]))
+        if not order:
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        await q.edit_message_text(order_card_text(order), parse_mode="Markdown",
+                                  reply_markup=admin_order_keyboard(order["id"], order["status"]))
+        await q.answer()
+    elif parts[1] == "set":
+        order_id, status = int(parts[2]), parts[3]
+        if status not in ORDER_STATUSES:
+            await q.answer("Неизвестный статус.", show_alert=True)
+            return
+        order = get_order(order_id)
+        if not order:
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        set_order_status(order_id, status)
+        _, customer_message = ORDER_STATUSES[status]
+        if order["customer_chat_id"]:
+            try:
+                await context.bot.send_message(chat_id=order["customer_chat_id"], text=customer_message)
+            except Exception:
+                log.exception("Could not notify customer about order status")
+        order = get_order(order_id)
+        await q.edit_message_text(order_card_text(order), parse_mode="Markdown",
+                                  reply_markup=admin_order_keyboard(order_id, status))
+        await q.answer("Статус обновлён")
 
 
 def order_status_keyboard(customer_chat_id):
