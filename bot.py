@@ -293,7 +293,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
             resize_keyboard=True,
-            one_time_keyboard=True
+            one_time_keyboard=False,
+            is_persistent=True
         )
     )
     context.user_data["catalog_prompt_message_id"] = prompt.message_id
