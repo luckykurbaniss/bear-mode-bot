@@ -329,7 +329,12 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data
     if data == "home":
         # Fully reset the unfinished catalog/order flow before showing the main menu.
+        prompt_id = context.user_data.get("catalog_prompt_message_id")
+        prompt_chat_id = context.user_data.get("catalog_prompt_chat_id")
         context.user_data.clear()
+        if prompt_id and prompt_chat_id:
+            context.user_data["catalog_prompt_message_id"] = prompt_id
+            context.user_data["catalog_prompt_chat_id"] = prompt_chat_id
         await q.edit_message_text(
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
@@ -352,16 +357,19 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "☎️ Чтобы задать вопрос по заказу, напиши владельцу канала: @lucky_ranger",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
         )
-    await remove_catalog_prompt(context, context.user_data)
     return ConversationHandler.END
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await remove_catalog_prompt(context, context.user_data)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
+    prompt_id = context.user_data.get("catalog_prompt_message_id")
+    prompt_chat_id = context.user_data.get("catalog_prompt_chat_id")
     context.user_data.clear()
+    if prompt_id and prompt_chat_id:
+        context.user_data["catalog_prompt_message_id"] = prompt_id
+        context.user_data["catalog_prompt_chat_id"] = prompt_chat_id
     context.user_data["set_id"] = set_id
     await q.edit_message_text(
         f"🍱 *{item['name']}*\n\n{item['items']}\n\nЦена: *170.000 ₫*\n\nСколько порций заказать?",
@@ -371,7 +379,6 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ К сетам", callback_data="catalog")]
         ])
     )
-    await remove_catalog_prompt(context, context.user_data)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -491,7 +498,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Receive an order submitted by the BEAR MODE website via Telegram Web App."""
-    await remove_catalog_prompt(context, context.user_data)
     message = update.effective_message
     if not message or not message.web_app_data:
         return
