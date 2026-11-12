@@ -561,6 +561,7 @@ async def main():
 
     conv = ConversationHandler(
         entry_points=[
+            CommandHandler("start", start),
             CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
         ],
         states={
@@ -590,9 +591,9 @@ async def main():
         },
         fallbacks=[CommandHandler("cancel", cancel_command)],
         per_message=False,
+        allow_reentry=True,
     )
 
-    app.add_handler(CommandHandler("start", start))
     init_db()
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("admin", admin_command))
