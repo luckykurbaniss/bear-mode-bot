@@ -308,17 +308,17 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def remove_catalog_prompt(context, user_data):
-    for message_key, chat_key in (
-        ("catalog_prompt_message_id", "catalog_prompt_chat_id"),
-        ("welcome_message_id", "welcome_chat_id"),
-    ):
-        message_id = user_data.pop(message_key, None)
-        chat_id = user_data.pop(chat_key, None)
-        if message_id and chat_id:
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-            except Exception:
-                log.debug("Start message already removed or cannot be deleted")
+    # Remove only the separate Web App prompt. The welcome message is reused
+    # by inline buttons and must stay in chat so it can be edited into the catalog.
+    message_id = user_data.pop("catalog_prompt_message_id", None)
+    chat_id = user_data.pop("catalog_prompt_chat_id", None)
+    user_data.pop("welcome_message_id", None)
+    user_data.pop("welcome_chat_id", None)
+    if message_id and chat_id:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            log.debug("Catalog prompt already removed or cannot be deleted")
 
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
