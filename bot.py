@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -229,7 +230,12 @@ def main():
     app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(catalog|delivery|contact|home)$"))
     app.add_handler(CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$"))
     print("BEAR MODE bot is running...")
-    app.run_polling()
+
+loop = asyncio.new_event_loop()
+asyncio.set_event_loop(loop)
+
+app.run_polling()
+    
 
 if __name__ == "__main__":
     main()
