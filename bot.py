@@ -315,7 +315,6 @@ async def remove_catalog_prompt(context, user_data):
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await remove_catalog_prompt(context, context.user_data)
     data = q.data
     if data == "home":
         await q.edit_message_text(
@@ -340,12 +339,12 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "☎️ Чтобы задать вопрос по заказу, напиши владельцу канала: @lucky_ranger",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
         )
+    await remove_catalog_prompt(context, context.user_data)
     return ConversationHandler.END
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await remove_catalog_prompt(context, context.user_data)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
@@ -358,6 +357,7 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ К сетам", callback_data="catalog")]
         ])
     )
+    await remove_catalog_prompt(context, context.user_data)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
