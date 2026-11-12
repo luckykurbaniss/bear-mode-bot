@@ -281,11 +281,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔥 4 сета на выбор • 170.000 ₫ за сет\n\n"
         "Или открой полный каталог и оформи заказ здесь:"
     )
-    await update.message.reply_text(
+    welcome = await update.message.reply_text(
         text + "\n\n🌐 Кнопка полного каталога находится внизу экрана.",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
+    context.user_data["welcome_message_id"] = welcome.message_id
+    context.user_data["welcome_chat_id"] = welcome.chat_id
     prompt = await update.message.reply_text(
         "Открыть полный каталог:",
         reply_markup=ReplyKeyboardMarkup(
@@ -306,13 +308,17 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def remove_catalog_prompt(context, user_data):
-    message_id = user_data.pop("catalog_prompt_message_id", None)
-    chat_id = user_data.pop("catalog_prompt_chat_id", None)
-    if message_id and chat_id:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except Exception:
-            log.debug("Catalog prompt already removed or cannot be deleted")
+    for message_key, chat_key in (
+        ("catalog_prompt_message_id", "catalog_prompt_chat_id"),
+        ("welcome_message_id", "welcome_chat_id"),
+    ):
+        message_id = user_data.pop(message_key, None)
+        chat_id = user_data.pop(chat_key, None)
+        if message_id and chat_id:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            except Exception:
+                log.debug("Start message already removed or cannot be deleted")
 
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -348,6 +354,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    await remove_catalog_prompt(context, context.user_data)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
