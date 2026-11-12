@@ -279,12 +279,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Или открой полный каталог и оформи заказ здесь:"
     )
     await update.message.reply_text(
-        text,
+        text + "\n\n🌐 Кнопка полного каталога находится внизу экрана.",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
     await update.message.reply_text(
-        "🌐 Кнопка полного каталога находится внизу экрана.",
+        "Открыть полный каталог:",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
             resize_keyboard=True,
