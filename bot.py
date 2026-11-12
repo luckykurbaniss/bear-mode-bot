@@ -271,8 +271,8 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Reset any unfinished bot-order flow before showing the catalog entry point.
-    await remove_catalog_prompt(context, context.user_data)
+    # Reset unfinished ordering locally; avoid an extra Telegram API delete call
+    # so /start responds quickly even after a previous order.
     context.user_data.clear()
     text = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
