@@ -4,6 +4,7 @@ import logging
 import json
 import sqlite3
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
     KeyboardButton, ReplyKeyboardMarkup
@@ -23,6 +24,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
 SETS = {
     "1": {
@@ -86,7 +88,7 @@ def save_order(customer_chat_id, customer_name, phone, address, delivery_date, d
             """INSERT INTO orders
             (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')""",
-            (datetime.now().astimezone().isoformat(timespec="seconds"), customer_chat_id,
+            (datetime.now(VN_TZ).isoformat(timespec="seconds"), customer_chat_id,
              customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total)
         )
         return cur.lastrowid
@@ -107,7 +109,7 @@ def get_orders(status="all", limit=8, offset=0):
 
 
 def get_order_stats():
-    today = datetime.now().astimezone().date().isoformat()
+    today = datetime.now(VN_TZ).date().isoformat()
     with db_connect() as conn:
         total = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
         today_count, today_revenue = conn.execute(
@@ -530,9 +532,11 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
             raise ValueError("One or more customer fields are too long")
         try:
-            date.fromisoformat(delivery_date)
+            requested_date = date.fromisoformat(delivery_date)
         except ValueError as exc:
             raise ValueError("Invalid delivery date") from exc
+        if requested_date < datetime.now(VN_TZ).date():
+            raise ValueError("Delivery date cannot be in the past")
         if not isinstance(items, list) or not 1 <= len(items) <= len(SETS):
             raise ValueError("The order must contain between 1 and 4 set types")
 
