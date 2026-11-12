@@ -331,6 +331,17 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
+        # Re-attach the Mini App launch keyboard: the previous prompt message
+        # may have been deleted when the customer entered the set flow.
+        await q.message.reply_text(
+            "🌐 Открыть меню и заказать:",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
+                resize_keyboard=True,
+                one_time_keyboard=False,
+                is_persistent=True
+            )
+        )
     elif data == "catalog":
         await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
     elif data == "delivery":
