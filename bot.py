@@ -272,7 +272,7 @@ async def admin_order_status(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await q.answer("Не удалось распознать статус заказа.", show_alert=True)
         return
 
-    marker = "\\n\\n📌 Статус:"
+    marker = "\n\n📌 Статус:"
     current_text = q.message.text or ""
     order_text = current_text.split(marker, 1)[0]
     updated_text = f"{order_text}{marker} {status_label}"
