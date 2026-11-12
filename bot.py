@@ -275,11 +275,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🐻 *BEAR MODE — еда с характером!*\n\n"
         "Сытные домашние сеты в Нячанге 🇻🇳\n"
         "Выбирай свой вариант, оформляй заказ — приготовим и доставим!\n\n"
-        "🔥 4 сета на выбор • 170.000 ₫ за сет"
+        "🔥 4 сета на выбор • 170.000 ₫ за сет\n\n"
+        "Или открой полный каталог и оформи заказ здесь:"
     )
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
     await update.message.reply_text(
-        "Или открой полный каталог BEAR MODE и оформи заказ здесь:",
+        text,
+        parse_mode="Markdown",
+        reply_markup=main_keyboard()
+    )
+    await update.message.reply_text(
+        "🌐 Кнопка полного каталога находится внизу экрана.",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
             resize_keyboard=True
