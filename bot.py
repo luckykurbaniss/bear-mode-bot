@@ -3,7 +3,7 @@ import os
 import logging
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
     KeyboardButton, ReplyKeyboardMarkup
@@ -126,6 +126,12 @@ def set_order_status(order_id, status):
         conn.execute("UPDATE orders SET status=? WHERE id=?", (status, order_id))
 
 
+def delete_order(order_id):
+    """Remove an order only when its notification could not be delivered."""
+    with db_connect() as conn:
+        conn.execute("DELETE FROM orders WHERE id=? AND status='new'", (order_id,))
+
+
 def admin_only(update):
     return bool(ADMIN_CHAT_ID) and update.effective_user and str(update.effective_user.id) == ADMIN_CHAT_ID
 
@@ -217,7 +223,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not order:
             await q.answer("Заказ не найден.", show_alert=True)
             return
-        await q.edit_message_text(order_card_text(order), parse_mode="Markdown",
+        await q.edit_message_text(order_card_text(order),
                                   reply_markup=admin_order_keyboard(order["id"], order["status"]))
         await q.answer()
     elif parts[1] == "set":
@@ -237,7 +243,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 log.exception("Could not notify customer about order status")
         order = get_order(order_id)
-        await q.edit_message_text(order_card_text(order), parse_mode="Markdown",
+        await q.edit_message_text(order_card_text(order),
                                   reply_markup=admin_order_keyboard(order_id, status))
         await q.answer("Статус обновлён")
 
@@ -517,15 +523,25 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
 
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
-        if not isinstance(items, list) or not items:
-            raise ValueError("The order has no items")
+        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
+            raise ValueError("One or more customer fields are too long")
+        try:
+            date.fromisoformat(delivery_date)
+        except ValueError as exc:
+            raise ValueError("Invalid delivery date") from exc
+        if not isinstance(items, list) or not 1 <= len(items) <= len(SETS):
+            raise ValueError("The order must contain between 1 and 4 set types")
 
         lines = []
         total = 0
+        seen_set_ids = set()
         for entry in items:
+            if not isinstance(entry, dict):
+                raise ValueError("Invalid order item")
             set_id = str(entry.get("id", ""))
-            if set_id not in SETS:
-                raise ValueError("Unknown set")
+            if set_id not in SETS or set_id in seen_set_ids:
+                raise ValueError("Unknown or repeated set")
+            seen_set_ids.add(set_id)
             quantity = int(entry.get("quantity", 0))
             if quantity < 1 or quantity > 100:
                 raise ValueError("Invalid quantity")
@@ -565,11 +581,15 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             delivery_date, delivery_time, comment, items_text, total
         )
         admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
-        await context.bot.send_message(
-            chat_id=int(ADMIN_CHAT_ID),
-            text=admin_text,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
-        )
+        try:
+            await context.bot.send_message(
+                chat_id=int(ADMIN_CHAT_ID),
+                text=admin_text,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
+            )
+        except Exception:
+            delete_order(order_id)
+            raise
         await message.reply_text(
             "🎉 Заказ отправлен! Спасибо!\n"
             "Мы скоро свяжемся с вами для подтверждения доставки."
