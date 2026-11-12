@@ -155,7 +155,7 @@ def admin_order_keyboard(order_id, status):
 def order_card_text(order):
     label = ORDER_STATUSES.get(order["status"], (order["status"], ""))[0]
     return (
-        f"🐻 *ЗАКАЗ BEAR MODE №{order['id']}*\n\n"
+        f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\n\n"
         f"📌 Статус: {label}\n"
         f"🕒 Создан: {order['created_at']}\n"
         f"👤 Имя: {order['customer_name']}\n"
@@ -479,11 +479,15 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             items_text, context.user_data["total"]
         )
         admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
-        await context.bot.send_message(
-            chat_id=int(ADMIN_CHAT_ID),
-            text=admin_text,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
-        )
+        try:
+            await context.bot.send_message(
+                chat_id=int(ADMIN_CHAT_ID),
+                text=admin_text,
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
+            )
+        except Exception:
+            delete_order(order_id)
+            raise
 
         await q.edit_message_text(
             "🎉 Заказ отправлен! Спасибо!\n\n"
