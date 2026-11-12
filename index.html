@@ -4,7 +4,9 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#111111"><title>BEAR MODE — меню Нячанг</title>
 <link rel="preconnect" href="https://telegram.org" crossorigin>
-<link rel="preconnect" href="https://github.githubassets.com" crossorigin>
+<link rel="preconnect" href="https://luckykurbaniss.github.io" crossorigin>
+<link rel="preload" as="image" href="assets/hero.jpg" fetchpriority="high">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <style>
 :root{--bg:#101010;--panel:#1a1a1a;--panel2:#24201d;--red:#ed242b;--red2:#a90f16;--gold:#f5bd47;--cream:#fff8eb;--muted:#b9b0a3;--line:#45352a;--green:#153b2d}
@@ -44,7 +46,7 @@ const sets=[
 ];
 const ingredients=[['Багет','assets/baguette.jpg'],['Овощной салат','assets/vegetable-salad.jpg'],['Лосось','assets/salmon.jpg'],['Морс','assets/mors.jpg'],['Мини-банан','assets/banana.jpg'],['Витаминный салат','assets/vitamin-salad.jpg'],['Салат «Свежесть»','assets/freshness-salad.jpg'],['Куриное бедро','assets/chicken-thigh.jpg'],['Домашние котлеты','assets/cutlets.jpg'],['Куриная грудка','assets/chicken-breast.jpg'],['Картофельное пюре','assets/mashed-potatoes.jpg'],['Рис с овощами','assets/rice-vegetables.jpg'],['Гречка с грибами','assets/buckwheat-mushrooms.jpg'],['Омлет','assets/omelet.jpg'],['Яйцо отварное','assets/boiled-egg.jpg']];
 const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/\u00a0/g,'.')+' ₫';
-function render(){ $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i<2?'eager':'lazy'}" fetchpriority="${i<2?'high':'low'}" decoding="async"></div><div class="card-body"><h3>${s.name}</h3><div class="desc">${s.tag}<br>${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');$('ingredients').innerHTML=ingredients.map(x=>`<div class="ingredient"><img src="${x[1]}" alt="${x[0]}" loading="lazy" decoding="async"><span>${x[0]}</span></div>`).join('')}
+function render(){ $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" fetchpriority="${i===0?'high':'low'}" decoding="async"></div><div class="card-body"><h3>${s.name}</h3><div class="desc">${s.tag}<br>${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');$('ingredients').innerHTML=ingredients.map(x=>`<div class="ingredient"><img src="${x[1]}" alt="${x[0]}" loading="lazy" decoding="async"><span>${x[0]}</span></div>`).join('')}
 function add(id){cart[id]=(cart[id]||0)+1;update();toast('Добавлено в корзину 🐻')}
 function change(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update()}
 function update(){let n=Object.values(cart).reduce((a,b)=>a+b,0),sum=n*PRICE;$('count').textContent=n;$('summary').textContent=n?`${n} порц. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);$('cartItems').innerHTML=n?sets.filter(s=>cart[s.id]).map(s=>`<div class="row"><div><b>${s.name}</b><br><span class="note">${money(PRICE)} / порция</span></div><div class="qty"><button type="button" onclick="change('${s.id}',-1)">−</button><b>${cart[s.id]}</b><button type="button" onclick="change('${s.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>'}
