@@ -2,7 +2,10 @@ import asyncio
 import os
 import logging
 import json
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
+    KeyboardButton, ReplyKeyboardMarkup
+)
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
@@ -43,7 +46,6 @@ SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
 def main_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))],
         [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
         [InlineKeyboardButton("📦 Как работает доставка", callback_data="delivery")],
         [InlineKeyboardButton("☎️ Связаться", callback_data="contact")],
@@ -63,6 +65,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔥 4 сета на выбор • 170.000 ₫ за сет"
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+    await update.message.reply_text(
+        "Или открой полный каталог BEAR MODE и оформи заказ здесь:",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
+            resize_keyboard=True
+        )
+    )
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
