@@ -23,9 +23,16 @@
 <div class="cartbar" id="openCart"><div><b>🛒 Корзина</b><small id="summary">Пока ничего не выбрано</small></div><div class="count" id="count">0</div></div><p class="note" style="text-align:center">Стоимость и возможность доставки подтвердим после получения адреса и времени.</p></main>
 <div class="overlay" id="overlay"><section class="sheet"><div class="sheethead"><h2>Оформление заказа</h2><button class="close" id="close" type="button">×</button></div><div id="cartItems"></div><div class="total"><span>Итого за сеты</span><span id="total">0 ₫</span></div>
 <form id="orderForm"><label>Ваше имя</label><input id="name" required maxlength="80" placeholder="Как к вам обращаться?"><label>Телефон</label><input id="phone" type="tel" required maxlength="30" placeholder="+84 ..."><label>Адрес доставки в Нячанге</label><textarea id="address" required maxlength="400" placeholder="Район, улица, дом, квартира"></textarea><label>Дата доставки</label><input id="date" type="date" required><label>Комментарий к заказу</label><textarea id="comment" maxlength="500" placeholder="Например: позвонить при доставке"></textarea><button class="btn primary" type="submit">🐼 Отправить заказ</button><p class="note">После отправки заказ поступит администратору BEAR MODE в Telegram. Мы свяжемся с вами для подтверждения деталей и стоимости доставки.</p></form></section></div><div class="toast" id="toast"></div>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
-const tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#111111');tg.setBackgroundColor?.('#101010')}
+let tg=window.Telegram?.WebApp;
+function initTelegram(){tg=window.Telegram?.WebApp;if(tg){tg.ready();tg.expand();tg.setHeaderColor?.('#111111');tg.setBackgroundColor?.('#101010')}}
+if(tg){initTelegram()}else{
+  const telegramSdk=document.createElement('script');
+  telegramSdk.src='https://telegram.org/js/telegram-web-app.js';
+  telegramSdk.async=true;
+  telegramSdk.onload=initTelegram;
+  document.head.appendChild(telegramSdk);
+}
 const PRICE=170000;
 const sets=[
 {id:'1',name:'Сет 1',tag:'Энергия',photo:'assets/set1.jpg',items:[['Гречка с грибами','35'],['Куриная грудка','100'],['Овощной салат','70'],['Яйцо отварное','10'],['Мини-банан','5'],['Морс','15'],['Багет','15']]},
