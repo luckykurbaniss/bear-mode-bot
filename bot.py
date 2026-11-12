@@ -149,15 +149,15 @@ def admin_order_keyboard(order_id, status):
 def order_card_text(order):
     label = ORDER_STATUSES.get(order["status"], (order["status"], ""))[0]
     return (
-        f"🐻 *ЗАКАЗ BEAR MODE №{order['id']}*\\n\\n"
-        f"📌 Статус: {label}\\n"
-        f"🕒 Создан: {order['created_at']}\\n"
-        f"👤 Имя: {order['customer_name']}\\n"
-        f"📱 Телефон: {order['phone']}\\n"
-        f"📍 Адрес: {order['address']}\\n"
-        f"📅 Доставка: {order['delivery_date'] or 'не указана'} {order['delivery_time'] or ''}\\n"
-        f"🍱 Заказ: {order['items_text']}\\n"
-        f"💰 Сумма: {order['total']:,} ₫\\n"
+        f"🐻 *ЗАКАЗ BEAR MODE №{order['id']}*\n\n"
+        f"📌 Статус: {label}\n"
+        f"🕒 Создан: {order['created_at']}\n"
+        f"👤 Имя: {order['customer_name']}\n"
+        f"📱 Телефон: {order['phone']}\n"
+        f"📍 Адрес: {order['address']}\n"
+        f"📅 Доставка: {order['delivery_date'] or 'не указана'} {order['delivery_time'] or ''}\n"
+        f"🍱 Заказ: {order['items_text']}\n"
+        f"💰 Сумма: {order['total']:,} ₫\n"
         f"💬 Комментарий: {order['comment'] or 'Нет'}"
     ).replace(",", ".")
 
@@ -178,12 +178,12 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = q.data.split(":")
     if parts[1] == "stats":
         total, today_count, today_revenue, revenue, new_count = get_order_stats()
-        text = ("📊 *СТАТИСТИКА BEAR MODE*\\n\\n"
-                f"🧾 Всего заказов: *{total}*\\n"
-                f"🆕 Новых: *{new_count}*\\n"
-                f"📅 Заказов сегодня: *{today_count}*\\n"
-                f"💵 Сумма заказов сегодня: *{today_revenue:,} ₫*\\n"
-                f"💰 Выручка по подтверждённым: *{revenue:,} ₫*\\n\\n"
+        text = ("📊 *СТАТИСТИКА BEAR MODE*\n\n"
+                f"🧾 Всего заказов: *{total}*\n"
+                f"🆕 Новых: *{new_count}*\n"
+                f"📅 Заказов сегодня: *{today_count}*\n"
+                f"💵 Сумма заказов сегодня: *{today_revenue:,} ₫*\n"
+                f"💰 Выручка по подтверждённым: *{revenue:,} ₫*\n\n"
                 "_В выручку включены подтверждённые, готовящиеся, переданные курьеру и доставленные заказы._").replace(",", ".")
         await q.edit_message_text(text, parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")]]))
@@ -209,7 +209,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             rows.append(nav)
         rows.append([InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")])
         title = "🆕 *НОВЫЕ ЗАКАЗЫ*" if status == "new" else "📋 *ВСЕ ЗАКАЗЫ*"
-        await q.edit_message_text(title if orders else title + "\\n\\nЗаказов пока нет.",
+        await q.edit_message_text(title if orders else title + "\n\nЗаказов пока нет.",
                                   parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
         await q.answer()
     elif parts[1] == "order":
@@ -431,7 +431,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["address"], "", "", context.user_data["comment"],
             items_text, context.user_data["total"]
         )
-        admin_text = f"🧾 Номер заказа: №{order_id}\\n\\n" + admin_text
+        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
         await context.bot.send_message(
             chat_id=int(ADMIN_CHAT_ID),
             text=admin_text,
@@ -523,7 +523,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             user.id if user else None, customer_name, phone, address,
             delivery_date, delivery_time, comment, items_text, total
         )
-        admin_text = f"🧾 Номер заказа: №{order_id}\\n\\n" + admin_text
+        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
         await context.bot.send_message(
             chat_id=int(ADMIN_CHAT_ID),
             text=admin_text,
