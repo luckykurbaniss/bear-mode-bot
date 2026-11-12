@@ -327,6 +327,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     data = q.data
     if data == "home":
+        # Fully reset the unfinished catalog/order flow before showing the main menu.
+        context.user_data.clear()
         await q.edit_message_text(
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
