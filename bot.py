@@ -155,7 +155,7 @@ def order_card_text(order):
         f"👤 Имя: {order['customer_name']}\n"
         f"📱 Телефон: {order['phone']}\n"
         f"📍 Адрес: {order['address']}\n"
-        f"📅 Доставка: {order['delivery_date'] or 'не указана'} {order['delivery_time'] or ''}\n"
+        f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
         f"🍱 Заказ: {order['items_text']}\n"
         f"💰 Сумма: {order['total']:,} ₫\n"
         f"💬 Комментарий: {order['comment'] or 'Нет'}"
@@ -474,7 +474,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         comment = str(order.get("comment", "")).strip()
         items = order.get("items", [])
 
-        if not all([customer_name, phone, address, delivery_date, delivery_time]):
+        if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
         if not isinstance(items, list) or not items:
             raise ValueError("The order has no items")
@@ -509,7 +509,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             + f"\n📱 Телефон: {phone}"
             + f"\n📍 Адрес: {address}"
             + f"\n📅 Дата доставки: {delivery_date}"
-            + f"\n🕒 Время доставки: {delivery_time}"
+
             + f"\n💬 Комментарий: {comment or 'Нет'}"
         )
         if user:
