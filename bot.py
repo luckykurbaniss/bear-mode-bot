@@ -297,6 +297,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
     )
+    # Remove the old persistent "Открыть меню и заказать" reply keyboard.
+    # The Telegram chat-menu button above replaces it with the single "Магазин" pill.
+    await update.message.reply_text("\u2063", reply_markup=ReplyKeyboardRemove())
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
     return ConversationHandler.END
 
