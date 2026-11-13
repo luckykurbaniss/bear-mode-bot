@@ -80,19 +80,25 @@ let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60
 $('orderForm').onsubmit=async e=>{
  e.preventDefault();
  if(!Object.keys(cart).length)return toast('Корзина пуста');
- if(!tg||!tg.initData||!tg.sendData){toast('Открой меню через кнопку «Открыть меню и заказать» внизу чата Telegram.');return}
+ if(!tg||!tg.initData){toast('Telegram не передал данные запуска. Закрой меню и открой его кнопкой «Открыть меню и заказать» в чате бота.');return}
  const submitButton=$('orderForm').querySelector('button[type="submit"]');
  if(submitButton.disabled)return;
  const order={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim()};
  submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';
  try{
-  tg.sendData(JSON.stringify(order));
+  const response=await fetch('https://bear-mode-bot-d2e84d.subhub.tr/api/order',{
+   method:'POST',
+   headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},
+   body:JSON.stringify(order)
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.ok)throw new Error(result.error||'Сервер не принял заказ');
   submitButton.textContent='Заказ отправлен! 🐼';
-  toast('Заказ отправлен в Telegram. Дождись подтверждения в чате.');
-  setTimeout(()=>tg.close(),900);
+  toast('Заказ №'+result.order_id+' принят! Проверь Telegram.');
+  setTimeout(()=>tg.close(),1200);
  }catch(err){
   submitButton.disabled=false;submitButton.textContent='🐼 Отправить заказ';
-  toast('Не удалось отправить заказ. Напишите @lucky_ranger');
+  toast(err.message||'Не удалось отправить заказ. Напишите @lucky_ranger');
  }
 };
 render();update();
