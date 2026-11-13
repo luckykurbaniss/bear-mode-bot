@@ -341,39 +341,38 @@ async def set_shop_hint_visibility(context, visible, chat_id):
     message_id = context.chat_data.get("shop_hint_message_id")
     saved_chat_id = context.chat_data.get("shop_hint_chat_id")
 
-    if message_id and saved_chat_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=saved_chat_id,
-                message_id=message_id,
-                text=(
-                    "🛒 Магазин всегда доступен на кнопке внизу."
-                    if visible else "\u2060"
+    if not visible:
+        # Remove only the hint message; leave the persistent shop reply keyboard untouched.
+        if message_id and saved_chat_id:
+            try:
+                await context.bot.delete_message(
+                    chat_id=saved_chat_id,
+                    message_id=message_id
                 )
-            )
-        except Exception as exc:
-            # Telegram returns this when the text already has the requested value.
-            # Treat it as success; never create a second hint message.
-            if "message is not modified" in str(exc).lower():
-                return
-            log.warning("Could not update existing shop hint: %s", exc)
+            except Exception:
+                log.debug("Shop hint already removed or cannot be deleted")
+        context.chat_data.pop("shop_hint_message_id", None)
+        context.chat_data.pop("shop_hint_chat_id", None)
         return
 
-    if visible:
-        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
-        shop_keyboard = ReplyKeyboardMarkup(
-            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-            resize_keyboard=True,
-            is_persistent=True,
-            input_field_placeholder="Откройте магазин BEAR MODE"
-        )
-        hint = await context.bot.send_message(
-            chat_id=chat_id,
-            text="🛒 Магазин всегда доступен на кнопке внизу.",
-            reply_markup=shop_keyboard
-        )
-        context.chat_data["shop_hint_message_id"] = hint.message_id
-        context.chat_data["shop_hint_chat_id"] = hint.chat_id
+    # On return to the main menu, create one fresh hint and remember its ID.
+    if message_id and saved_chat_id:
+        return
+
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
+    shop_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Откройте магазин BEAR MODE"
+    )
+    hint = await context.bot.send_message(
+        chat_id=chat_id,
+        text="🛒 Магазин всегда доступен на кнопке внизу.",
+        reply_markup=shop_keyboard
+    )
+    context.chat_data["shop_hint_message_id"] = hint.message_id
+    context.chat_data["shop_hint_chat_id"] = hint.chat_id
 
 
 async def remove_shop_hint(context):
