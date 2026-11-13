@@ -7,7 +7,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
-    MenuButtonWebApp, ReplyKeyboardRemove
+    KeyboardButton, ReplyKeyboardMarkup
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -280,18 +280,20 @@ def catalog_keyboard():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
-    text = (
+    welcome = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
-        "Сытные домашние сеты в Нячанге 🇻🇳\n"
-        "Выбирай свой вариант, оформляй заказ — приготовим и доставим!\n\n"
-        "🔥 4 сета на выбор • 170.000 ₫ за сет"
+        "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
+        "Выбирай готовый сет или собери свой заказ!\n\n"
+        "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Remove the old persistent reply-keyboard button from existing chats.
-    await update.message.reply_text(text, parse_mode="Markdown",
-                                    reply_markup=ReplyKeyboardRemove())
+    keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        resize_keyboard=True,
+        is_persistent=True
+    )
+    await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=keyboard)
     await update.message.reply_text(
-        "Выбирай, что будем делать:",
-        reply_markup=main_keyboard()
+        "Нажми кнопку «🌐 Открыть меню и заказать» внизу чата."
     )
     return ConversationHandler.END
 
@@ -675,14 +677,6 @@ async def main():
     )
 
     await app.initialize()
-    # Use Telegram's native chat menu button, like the "Магазин" button in the example.
-    # This replaces all extra catalog prompt messages and stays available in every menu.
-    await app.bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(
-            text="Магазин",
-            web_app=WebAppInfo(url=WEB_APP_URL)
-        )
-    )
     await app.start()
     await app.updater.start_polling()
 
