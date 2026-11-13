@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, ReplyKeyboardRemove, MenuButtonWebApp
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -300,16 +300,24 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
     shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-    shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-    # Attach the persistent shop keyboard to the existing welcome message.
+    # Put the Web App launcher in Telegram's native menu-button position,
+    # beside the message field (like the blue "Магазин" button in the reference).
+    try:
+        await context.bot.set_chat_menu_button(
+            chat_id=update.effective_chat.id,
+            menu_button=MenuButtonWebApp(
+                text="Магазин",
+                web_app=WebAppInfo(url=shop_url)
+            )
+        )
+    except Exception:
+        log.exception("Could not set Telegram shop menu button")
+
+    # Remove any old reply keyboard; the native Telegram menu button replaces it.
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
-        reply_markup=shop_keyboard
+        reply_markup=ReplyKeyboardRemove()
     )
     await update.message.reply_text(
         "🐼 Выбирай, что будем делать:",
@@ -322,7 +330,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     old_hint_chat_id = context.chat_data.pop("shop_hint_chat_id", None)
     hint = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🐾 Магазин всегда под лапкой!\\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        text="🐾 Магазин всегда под лапкой!\\nОткрывайте меню в любое время — кнопка «Магазин» слева от поля сообщения."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
@@ -337,16 +345,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_catalog_prompt(context)
     except Exception:
         log.exception("Could not clean up old menu messages; /start response was sent")
-
-    # Menu-button settings are optional: a Telegram API failure must not block /start.
-    try:
-        await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
-        await context.bot.set_chat_menu_button(
-            chat_id=update.effective_chat.id,
-            menu_button=MenuButtonDefault()
-        )
-    except Exception:
-        log.exception("Could not reset Telegram menu button; /start response was sent")
 
     # The shop hint is included in the first welcome message to avoid a delayed extra message.
     return ConversationHandler.END
