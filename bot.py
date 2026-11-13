@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
-API_PORT = int(os.getenv("PORT", "80"))
+API_PORT = 80  # HOKAS public subhub.tr web services must listen on port 80
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -827,10 +827,11 @@ async def main():
         print(f"BEAR MODE: order API listening on 0.0.0.0:{API_PORT}.", flush=True)
         print(f"BEAR MODE: health check at /health; allowed origin: {ALLOWED_WEB_ORIGIN}", flush=True)
     except Exception:
-        log.exception("ORDER API FAILED TO START on port %s; Telegram bot will keep running", API_PORT)
+        log.exception("ORDER API FAILED TO START on required HOKAS port %s", API_PORT)
         if runner:
             await runner.cleanup()
             runner = None
+        raise RuntimeError(f"BEAR MODE order API could not bind to HOKAS port {API_PORT}")
 
     print("BEAR MODE: startup complete; waiting for Telegram updates.", flush=True)
     try:
