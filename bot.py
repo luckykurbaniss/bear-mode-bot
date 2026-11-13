@@ -286,6 +286,11 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    log.info(
+        "Received /start: chat_id=%s user_id=%s",
+        update.effective_chat.id if update.effective_chat else None,
+        update.effective_user.id if update.effective_user else None,
+    )
     context.user_data.clear()
     welcome = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
@@ -855,7 +860,6 @@ async def main():
 
     conv = ConversationHandler(
         entry_points=[
-            CommandHandler("start", start),
             CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
         ],
         states={
@@ -895,6 +899,9 @@ async def main():
     )
 
     init_db()
+    # Keep /start independent from ConversationHandler state so it always resets
+    # the chat and shows the main menu, even after an interrupted conversation.
+    app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("ping", ping_command))
     app.add_handler(CommandHandler("admin", admin_command))
