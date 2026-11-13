@@ -26,7 +26,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5500196056").strip()  # BEAR MODE admin Telegram chat
+ADMIN_CHAT_ID = "5500196056"  # BEAR MODE admin Telegram chat
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
@@ -304,7 +304,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         menu_button=MenuButtonDefault()
     )
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-7"
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
     shop_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
         resize_keyboard=True,
@@ -722,50 +722,7 @@ def validate_telegram_init_data(init_data: str):
 
 
 async def health_api(request):
-    updater = request.app.get("telegram_updater")
-    bot = request.app.get("telegram_bot")
-    ready = bool(request.app.get("telegram_ready")) and updater is not None and updater.running
-    if request.app.get("telegram_conflict"):
-        return web.json_response({
-            "ok": False,
-            "service": "BEAR MODE",
-            "telegram_polling": bool(updater and updater.running),
-            "error": "Another BEAR MODE process is already polling Telegram. Stop the duplicate instance."
-        }, status=503)
-    if not ready or bot is None:
-        return web.json_response({
-            "ok": False,
-            "service": "BEAR MODE",
-            "telegram_polling": bool(updater and updater.running),
-            "error": "Telegram bot is not ready"
-        }, status=503)
-    try:
-        me = await bot.get_me()
-        webhook = await bot.get_webhook_info()
-        if webhook.url:
-            return web.json_response({
-                "ok": False,
-                "service": "BEAR MODE",
-                "telegram_polling": updater.running,
-                "webhook_configured": True,
-                "error": "Telegram webhook is still configured"
-            }, status=503)
-        return web.json_response({
-            "ok": True,
-            "service": "BEAR MODE",
-            "telegram_polling": updater.running,
-            "webhook_configured": False,
-            "bot_username": me.username,
-            "port": API_PORT
-        })
-    except Exception as exc:
-        log.exception("Telegram health check failed")
-        return web.json_response({
-            "ok": False,
-            "service": "BEAR MODE",
-            "telegram_polling": updater.running,
-            "error": str(exc)[:300]
-        }, status=503)
+    return web.json_response({"ok": True, "service": "BEAR MODE order API", "port": API_PORT})
 
 
 async def order_api(request):
@@ -929,53 +886,20 @@ async def main():
         CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
     )
 
-    print("BEAR MODE: starting health server...", flush=True)
-    health_app = web.Application()
-    health_app["telegram_ready"] = False
-    health_app["telegram_conflict"] = False
-    health_app["telegram_updater"] = app.updater
-    health_app["telegram_bot"] = app.bot
-    health_app.router.add_get("/", health_api)
-    health_app.router.add_get("/health", health_api)
-    runner = web.AppRunner(health_app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", API_PORT)
-    await site.start()
-    print(f"BEAR MODE: health server listening on 0.0.0.0:{API_PORT}.", flush=True)
-
-    print("BEAR MODE: checking Telegram token and connection...", flush=True)
+    print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
-    me = await app.bot.get_me()
-    print(f"BEAR MODE: Telegram connected as @{me.username}.", flush=True)
-
-    # Long polling cannot run while a webhook is configured.
-    await app.bot.delete_webhook(drop_pending_updates=False)
-    webhook = await app.bot.get_webhook_info()
-    if webhook.url:
-        raise RuntimeError("Telegram webhook is still configured; polling cannot start.")
-
     await app.start()
+    await app.updater.start_polling()
+    print("BEAR MODE: Telegram polling started.", flush=True)
 
-    def polling_error(error):
-        log.error("Telegram polling error: %s", error)
-        if "Conflict" in str(error) or "terminated by other getUpdates request" in str(error):
-            health_app["telegram_conflict"] = True
-
-    await app.updater.start_polling(
-        drop_pending_updates=False,
-        error_callback=polling_error
-    )
-    health_app["telegram_ready"] = True
-    print("BEAR MODE: Telegram polling started and health checks are ready.", flush=True)
-
+    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
+    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
-        health_app["telegram_ready"] = False
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
-        await runner.cleanup()
 
 
 if __name__ == "__main__":
