@@ -330,7 +330,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     old_hint_chat_id = context.chat_data.pop("shop_hint_chat_id", None)
     hint = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Магазин» слева от поля сообщения."
+        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Магазин» слева от поля сообщения."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
