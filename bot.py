@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, MenuButtonDefault
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -355,7 +355,26 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
+        # Restore (replace, never append) the single shop reply-keyboard button.
+        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
+        shop_keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
+            resize_keyboard=True,
+            is_persistent=True,
+            input_field_placeholder="Откройте магазин BEAR MODE"
+        )
+        await context.bot.send_message(
+            chat_id=q.message.chat_id,
+            text="🛒 Магазин снова доступен ниже.",
+            reply_markup=shop_keyboard
+        )
     elif data in ("catalog", "delivery", "contact"):
+        # Hide the shop launcher while the user is navigating the bot's inline menu.
+        await context.bot.send_message(
+            chat_id=q.message.chat_id,
+            text="📋 Меню бота",
+            reply_markup=ReplyKeyboardRemove()
+        )
         if data == "catalog":
             await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
         elif data == "delivery":
