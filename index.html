@@ -21,9 +21,9 @@
 </style></head><body>
 <header class="hero"><img src="assets/hero.jpg" alt="BEAR MODE in Nha Trang" fetchpriority="high" decoding="async"><div class="hero-shade"></div><div class="hero-copy"><div class="brand">BEAR MODE · NHA TRANG</div><h1>Еда с характером!</h1><p>Домашние сеты · Доставка по Нячангу</p></div></header>
 <main class="wrap"><div class="intro"><div><h2>Выбирай свой сет 🐻🐼</h2><p>Свежая домашняя еда — сытно и с заботой</p></div><div class="price-chip">170.000 ₫ / сет</div></div><section class="cards" id="products"></section>
-<h3 class="section-title">Что входит в наши сеты</h3><section class="ingredients" id="ingredients"></section>
+<h3 class="section-title">🐼 Создай свой идеальный сет</h3><p class="note" style="margin:0 2px 12px">Выбирай любимые блюда по отдельности — добавляй в корзину сколько захочешь.</p><section class="ingredients" id="ingredients"></section>
 <div class="cartbar" id="openCart"><div><b>🛒 Корзина</b><small id="summary">Пока ничего не выбрано</small></div><div class="count" id="count">0</div></div><p class="note" style="text-align:center">Стоимость и возможность доставки подтвердим после получения адреса и выбранной даты.</p></main>
-<div class="overlay" id="overlay"><section class="sheet"><div class="sheethead"><h2>Оформление заказа</h2><button class="close" id="close" type="button">×</button></div><div id="cartItems"></div><div class="total"><span>Итого за сеты</span><span id="total">0 ₫</span></div>
+<div class="overlay" id="overlay"><section class="sheet"><div class="sheethead"><h2>Оформление заказа</h2><button class="close" id="close" type="button">×</button></div><div id="cartItems"></div><div class="total"><span>Итого к оплате</span><span id="total">0 ₫</span></div>
 <form id="orderForm"><label>Ваше имя</label><input id="name" required maxlength="80" placeholder="Как к вам обращаться?"><label>Телефон</label><input id="phone" type="tel" required maxlength="30" placeholder="+84 ..."><label>Адрес доставки в Нячанге</label><textarea id="address" required maxlength="400" placeholder="Район, улица, дом, квартира"></textarea><label>Дата доставки</label><input id="date" type="date" required><label>Комментарий к заказу</label><textarea id="comment" maxlength="500" placeholder="Например: позвонить при доставке"></textarea><button class="btn primary" type="submit">🐼 Отправить заказ</button><p class="note">После отправки заказ поступит администратору BEAR MODE в Telegram. Мы свяжемся с вами для подтверждения деталей и стоимости доставки.</p></form></section></div><div class="toast" id="toast"></div>
 <script>
 const tg=window.Telegram?.WebApp;
@@ -44,16 +44,40 @@ const sets=[
 {id:'3',name:'Сет 3',tag:'Комфорт',photo:'assets/set3.jpg',items:[['Картофельное пюре','35'],['Домашняя котлета (2 шт.)','100'],['Витаминный салат','70'],['Омлет','15'],['Мини-банан','5'],['Морс','15'],['Багет','15']]},
 {id:'4',name:'Сет 4',tag:'Характер',photo:'assets/set4.jpg',items:[['Картофельное пюре','35'],['Куриное бедро','100'],['Салат «Свежесть»','70'],['Яйцо отварное','15'],['Мини-банан','5'],['Морс','15'],['Багет','15']]}
 ];
-const ingredients=[['Багет','assets/baguette.jpg'],['Овощной салат','assets/vegetable-salad.jpg'],['Лосось','assets/salmon.jpg'],['Морс','assets/mors.jpg'],['Мини-банан','assets/banana.jpg'],['Витаминный салат','assets/vitamin-salad.jpg'],['Салат «Свежесть»','assets/freshness-salad.jpg'],['Куриное бедро','assets/chicken-thigh.jpg'],['Домашние котлеты','assets/cutlets.jpg'],['Куриная грудка','assets/chicken-breast.jpg'],['Картофельное пюре','assets/mashed-potatoes.jpg'],['Рис с овощами','assets/rice-vegetables.jpg'],['Гречка с грибами','assets/buckwheat-mushrooms.jpg'],['Омлет','assets/omelet.jpg'],['Яйцо отварное','assets/boiled-egg.jpg']];
-const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/\u00a0/g,'.')+' ₫';
-function render(){ $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" fetchpriority="${i===0?'high':'low'}" decoding="async"></div><div class="card-body"><h3>${s.name}</h3><div class="desc">${s.tag}<br>${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');$('ingredients').innerHTML=ingredients.map(x=>`<div class="ingredient"><img src="${x[1]}" alt="${x[0]}" loading="lazy" decoding="async"><span>${x[0]}</span></div>`).join('')}
-function add(id){cart[id]=(cart[id]||0)+1;update();toast('Добавлено в корзину 🐻')}
+const dishes=[
+{id:'buckwheat',name:'Гречка с грибами',price:30000,photo:'assets/buckwheat-mushrooms.jpg'},
+{id:'rice',name:'Рис с овощами',price:30000,photo:'assets/rice-vegetables.jpg'},
+{id:'potato',name:'Картофельное пюре',price:30000,photo:'assets/mashed-potatoes.jpg'},
+{id:'chicken_breast',name:'Куриная грудка',price:60000,photo:'assets/chicken-breast.jpg'},
+{id:'salmon',name:'Лосось',price:80000,photo:'assets/salmon.jpg'},
+{id:'cutlets',name:'Домашние котлеты (2 шт.)',price:65000,photo:'assets/cutlets.jpg'},
+{id:'chicken_thigh',name:'Куриное бедро',price:60000,photo:'assets/chicken-thigh.jpg'},
+{id:'vegetable_salad',name:'Овощной салат',price:35000,photo:'assets/vegetable-salad.jpg'},
+{id:'freshness_salad',name:'Салат «Свежесть»',price:35000,photo:'assets/freshness-salad.jpg'},
+{id:'vitamin_salad',name:'Витаминный салат',price:35000,photo:'assets/vitamin-salad.jpg'},
+{id:'omelet',name:'Омлет',price:20000,photo:'assets/omelet.jpg'},
+{id:'egg',name:'Яйцо отварное',price:15000,photo:'assets/boiled-egg.jpg'},
+{id:'banana',name:'Мини-банан',price:10000,photo:'assets/banana.jpg'},
+{id:'mors',name:'Морс',price:20000,photo:'assets/mors.jpg'},
+{id:'baguette',name:'Багет',price:15000,photo:'assets/baguette.jpg'}
+];
+const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
+const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/\\u00a0/g,'.')+' ₫';
+function render(){
+ $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
+ $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
+}
+function add(id){cart[id]=(cart[id]||0)+1;update();toast('Добавлено в корзину 🐼')}
 function change(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update()}
-function update(){let n=Object.values(cart).reduce((a,b)=>a+b,0),sum=n*PRICE;$('count').textContent=n;$('summary').textContent=n?`${n} порц. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);$('cartItems').innerHTML=n?sets.filter(s=>cart[s.id]).map(s=>`<div class="row"><div><b>${s.name}</b><br><span class="note">${money(PRICE)} / порция</span></div><div class="qty"><button type="button" onclick="change('${s.id}',-1)">−</button><b>${cart[s.id]}</b><button type="button" onclick="change('${s.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>'}
+function update(){
+ const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0);
+ $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);
+ $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>';
+}
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
 $('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
 let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('date').min=local;$('date').value=local;
-$('orderForm').onsubmit=e=>{e.preventDefault();if(!Object.keys(cart).length)return toast('Корзина пуста');if(!tg||typeof tg.sendData!=='function'){toast('Открой меню через кнопку в Telegram-боте, чтобы отправить заказ.');return}const submitButton=$('orderForm').querySelector('button[type="submit"]');if(submitButton.disabled)return;const order={type:'bear_mode_order',items:sets.filter(s=>cart[s.id]).map(s=>({id:s.id,name:s.name,quantity:cart[s.id],unit_price:PRICE,composition:s.items})),total:Object.values(cart).reduce((a,b)=>a+b,0)*PRICE,customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim()};submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';try{tg.sendData(JSON.stringify(order))}catch(err){submitButton.disabled=false;submitButton.textContent='🐼 Отправить заказ';toast('Не удалось отправить. Напишите @lucky_ranger')} };
+$('orderForm').onsubmit=e=>{e.preventDefault();if(!Object.keys(cart).length)return toast('Корзина пуста');if(!tg||typeof tg.sendData!=='function'){toast('Открой меню через кнопку в Telegram-боте, чтобы отправить заказ.');return}const submitButton=$('orderForm').querySelector('button[type="submit"]');if(submitButton.disabled)return;const order={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim()};submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';try{tg.sendData(JSON.stringify(order))}catch(err){submitButton.disabled=false;submitButton.textContent='🐼 Отправить заказ';toast('Не удалось отправить. Напишите @lucky_ranger')} };
 render();update();
 
 if('serviceWorker' in navigator && location.protocol==='https:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}),{once:true})}
