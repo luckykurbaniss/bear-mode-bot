@@ -830,13 +830,19 @@ async def order_api(request):
                     InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
                 ]])
             )
+        except Exception:
+            delete_order(order_id)
+            log.exception("Could not deliver Mini App order to administrator")
+            raise
+        # Customer confirmation is best-effort; it must not undo an order
+        # that has already been delivered successfully to the administrator.
+        try:
             await request.app["bot"].send_message(
                 chat_id=int(user["id"]),
                 text=f"🎉 Заказ №{order_id} принят! Спасибо. Скоро свяжемся для подтверждения доставки."
             )
         except Exception:
-            delete_order(order_id)
-            raise
+            log.exception("Order reached administrator, but customer confirmation could not be sent")
         return web.json_response({"ok": True, "order_id": order_id}, headers=headers)
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=400, headers=headers)
@@ -949,11 +955,21 @@ async def main():
     )
     print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
-    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
+    # Start the public HTTP API used by the Telegram Mini App to submit orders.
+    api_app = web.Application()
+    api_app["bot"] = app.bot
+    api_app.router.add_get("/health", health_api)
+    api_app.router.add_route("*", "/api/orders", order_api)
+    api_runner = web.AppRunner(api_app)
+    await api_runner.setup()
+    api_site = web.TCPSite(api_runner, "0.0.0.0", API_PORT)
+    await api_site.start()
+    print(f"BEAR MODE: order API listening on 0.0.0.0:{API_PORT}.", flush=True)
+    print("BEAR MODE: startup complete; Telegram bot and order API are running.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
+        await api_runner.cleanup()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
