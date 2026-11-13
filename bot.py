@@ -317,11 +317,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=shop_keyboard
     )
     await update.message.reply_text(
-        "🐼 Выбирай, что будем делать:\n\n"
-        "🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+        "🐼 Выбирай, что будем делать:",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
+    await set_shop_hint_visibility(context, True, update.effective_chat.id)
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -402,10 +402,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_catalog_prompt(context)
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\n\n"
-            "🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
+        await set_shop_hint_visibility(context, True, q.message.chat_id)
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
@@ -435,6 +435,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     InlineKeyboardButton("⬅️ В главное меню", callback_data="home")
                 ]])
             )
+
+        await set_shop_hint_visibility(context, False, q.message.chat_id)
 
     return ConversationHandler.END
 
