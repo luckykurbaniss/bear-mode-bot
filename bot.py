@@ -299,7 +299,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonWebApp(
-            text="🛒 Оформить заказ",
+            text="Магазин",
             web_app=WebAppInfo(url=WEB_APP_URL)
         )
     )
