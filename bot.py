@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButton
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -295,14 +295,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-    # Remove the blue chat-menu button; keep the shop available on the reply keyboard.
-    await context.bot.set_chat_menu_button(menu_button=MenuButton())
+    # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
+    # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
+    # Reset both the bot-wide and this chat's custom menu button.
+    await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
-        menu_button=MenuButton()
+        menu_button=MenuButtonDefault()
     )
+    # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
     shop_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
         resize_keyboard=True,
@@ -589,13 +591,6 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
     if not message or not message.web_app_data:
         return
 
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-    shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-
     catalog_prices = {
         "set_1": ("Сет Энергия", PRICE), "set_2": ("Сет Атлантика", PRICE),
         "set_3": ("Сет Комфорт", PRICE), "set_4": ("Сет Характер", PRICE),
@@ -658,8 +653,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if not ADMIN_CHAT_ID:
             await message.reply_text(
                 "Заказ заполнен, но уведомления владельцу ещё не настроены. "
-                "Пожалуйста, напишите @lucky_ranger.",
-                reply_markup=shop_keyboard
+                "Пожалуйста, напишите @lucky_ranger."
             )
             log.error("Web App order received but ADMIN_CHAT_ID is not configured")
             return
@@ -696,21 +690,18 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             raise
         await message.reply_text(
             "🎉 Заказ отправлен! Спасибо!\n"
-            "Мы скоро свяжемся с вами для подтверждения доставки.",
-            reply_markup=shop_keyboard
+            "Мы скоро свяжемся с вами для подтверждения доставки."
         )
     except (ValueError, TypeError, json.JSONDecodeError):
         log.exception("Invalid order received from website")
         await message.reply_text(
             "Не удалось обработать заказ. Проверьте данные и попробуйте ещё раз "
-            "или напишите @lucky_ranger.",
-            reply_markup=shop_keyboard
+            "или напишите @lucky_ranger."
         )
     except Exception:
         log.exception("Failed to forward website order")
         await message.reply_text(
-            "Не удалось отправить заказ автоматически. Пожалуйста, напишите @lucky_ranger.",
-            reply_markup=shop_keyboard
+            "Не удалось отправить заказ автоматически. Пожалуйста, напишите @lucky_ranger."
         )
 
 
