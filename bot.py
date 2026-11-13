@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
-API_PORT = int(os.getenv("PORT", "80"))
+API_PORT = 80  # HOKAS subhub.tr web service must listen on port 80
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -817,6 +817,7 @@ async def main():
     try:
         api = web.Application(client_max_size=64 * 1024)
         api["bot"] = app.bot
+        api.router.add_get("/health", health_api)
         api.router.add_route("OPTIONS", "/api/order", order_api)
         api.router.add_post("/api/order", order_api)
         runner = web.AppRunner(api)
