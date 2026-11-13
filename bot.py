@@ -317,7 +317,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=shop_keyboard
     )
     await update.message.reply_text(
-        "Выбирай, что будем делать:",
+        "🐼 Выбирай, что будем делать:",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
@@ -406,7 +406,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_catalog_prompt(context)
         context.user_data.clear()
         await q.edit_message_text(
-            "Выбирай, что будем делать:",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
         await set_shop_hint_visibility(context, True, q.message.chat_id)
