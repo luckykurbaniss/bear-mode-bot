@@ -68,17 +68,41 @@ function render(){
  $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
  $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
 }
-async function add(id){await cartReady;cart[id]=(cart[id]||0)+1;update();saveCloudCart();toast('Добавлено в корзину 🐼')}
-async function change(id,d){await cartReady;cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update();saveCloudCart()}
+async function add(id){await cartReady;cart[id]=(cart[id]||0)+1;update();await saveCloudCart();toast('Добавлено в корзину 🐼')}
+async function change(id,d){await cartReady;cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update();await saveCloudCart()}
 function update(){
  try{localStorage.setItem('bearModeCart',JSON.stringify(cart))}catch(e){}
  const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0);
  $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);
  $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>';
 }
-function cloudGetCart(){return new Promise(resolve=>{if(!tg?.CloudStorage?.getItem)return resolve(null);tg.CloudStorage.getItem('bearModeCart',(err,value)=>resolve(err?null:value||null))})}
-function saveCloudCart(){if(tg?.CloudStorage?.setItem){tg.CloudStorage.setItem('bearModeCart',JSON.stringify(cart),err=>{if(err)console.warn('Cloud cart save failed',err)})}}
-const cartReady=(async()=>{const saved=await cloudGetCart();if(saved){try{const data=JSON.parse(saved);for(const [id,qty] of Object.entries(data)){if(catalog.some(x=>x.id===id)&&Number.isInteger(qty)&&qty>0)cart[id]=qty}}catch(e){console.warn('Invalid cloud cart',e)}}update()})();
+function storageGetCart(){
+ return new Promise(resolve=>{
+  try{
+   if(tg?.CloudStorage?.getItem){tg.CloudStorage.getItem('bearModeCart',(err,value)=>resolve(err?null:value||null));return}
+   if(tg?.DeviceStorage?.getItem){tg.DeviceStorage.getItem('bearModeCart',(err,value)=>resolve(err?null:value||null));return}
+   resolve(localStorage.getItem('bearModeCart'));
+  }catch(e){resolve(localStorage.getItem('bearModeCart'))}
+ })
+}
+let cartSaveQueue=Promise.resolve();
+function saveCloudCart(){
+ const value=JSON.stringify(cart);
+ try{localStorage.setItem('bearModeCart',value)}catch(e){}
+ cartSaveQueue=cartSaveQueue.then(()=>new Promise(resolve=>{
+  try{
+   if(tg?.CloudStorage?.setItem){tg.CloudStorage.setItem('bearModeCart',value,err=>{if(err)console.warn('Telegram CloudStorage save failed',err);resolve(!err);});return}
+   if(tg?.DeviceStorage?.setItem){tg.DeviceStorage.setItem('bearModeCart',value,err=>{if(err)console.warn('Telegram DeviceStorage save failed',err);resolve(!err);});return}
+   resolve(false);
+  }catch(e){console.warn('Telegram cart storage unavailable',e);resolve(false)}
+ }));
+ return cartSaveQueue;
+}
+const cartReady=(async()=>{
+ const saved=await storageGetCart();
+ if(saved){try{const data=JSON.parse(saved);for(const [id,qty] of Object.entries(data)){if(catalog.some(x=>x.id===id)&&Number.isInteger(qty)&&qty>0)cart[id]=qty}}catch(e){console.warn('Invalid saved cart',e)}}
+ update();
+})();
 const imageViewer=$('imageViewer'),imageViewerImg=$('imageViewerImg');
 function openImage(img){imageViewerImg.src=img.currentSrc||img.src;imageViewerImg.alt=img.alt||'';imageViewer.classList.add('show')}
 function closeImage(){imageViewer.classList.remove('show');imageViewerImg.removeAttribute('src')}
