@@ -86,9 +86,10 @@ $('orderForm').onsubmit=async e=>{
  submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';
  try{
   // sendData works when this Mini App is launched from the Telegram reply-keyboard Web App button.
-  if(!tg||!tg.initData||typeof tg.sendData!=='function'){
-   throw new Error('Открой магазин кнопкой «Открыть магазин» внизу чата Telegram.');
+  if(!tg||typeof tg.sendData!=='function'){
+   throw new Error('Telegram не передал функцию отправки. Закрой магазин и открой его кнопкой «Открыть магазин» в чате с ботом.');
   }
+  // sendData does not require initData; Telegram delivers this payload as web_app_data to the bot.
   tg.sendData(JSON.stringify(order));
   submitButton.textContent='Заказ отправлен! 🐼';
   toast('Заказ передан боту. Дождись подтверждения в Telegram.');
