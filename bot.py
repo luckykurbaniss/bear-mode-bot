@@ -279,9 +279,8 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Delete the previous one-off catalog prompt before sending a fresh one.
-    # This prevents duplicate "Open menu and order" messages after repeated /start.
-    await remove_catalog_prompt(context)
+    # Keep the single existing catalog prompt and reuse it on repeated /start.
+    # It is removed only while the customer is inside a menu section.
     context.user_data.clear()
     text = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
