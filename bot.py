@@ -26,7 +26,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = "5500196056"  # BEAR MODE admin Telegram chat
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5500196056").strip()  # BEAR MODE admin Telegram chat
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
@@ -725,6 +725,13 @@ async def health_api(request):
     updater = request.app.get("telegram_updater")
     bot = request.app.get("telegram_bot")
     ready = bool(request.app.get("telegram_ready")) and updater is not None and updater.running
+    if request.app.get("telegram_conflict"):
+        return web.json_response({
+            "ok": False,
+            "service": "BEAR MODE",
+            "telegram_polling": bool(updater and updater.running),
+            "error": "Another BEAR MODE process is already polling Telegram. Stop the duplicate instance."
+        }, status=503)
     if not ready or bot is None:
         return web.json_response({
             "ok": False,
@@ -925,6 +932,7 @@ async def main():
     print("BEAR MODE: starting health server...", flush=True)
     health_app = web.Application()
     health_app["telegram_ready"] = False
+    health_app["telegram_conflict"] = False
     health_app["telegram_updater"] = app.updater
     health_app["telegram_bot"] = app.bot
     health_app.router.add_get("/", health_api)
@@ -950,6 +958,8 @@ async def main():
 
     def polling_error(error):
         log.error("Telegram polling error: %s", error)
+        if "Conflict" in str(error) or "terminated by other getUpdates request" in str(error):
+            health_app["telegram_conflict"] = True
 
     await app.updater.start_polling(
         drop_pending_updates=False,
