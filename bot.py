@@ -286,6 +286,7 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await remove_catalog_prompt(context)
     context.user_data.clear()
     welcome = (
         "🐻 *BEAR MODE — еда с характером! 🐼*\n\n"
@@ -303,15 +304,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
-        resize_keyboard=True,
-        is_persistent=True
-    )
-    await update.message.reply_text(
-        "Нажми кнопку ниже, чтобы открыть меню и оформить заказ:",
-        reply_markup=shop_keyboard
-    )
+    await update.message.reply_text("Нажми кнопку «Магазин» внизу, чтобы открыть каталог и оформить заказ.")
+    prompt = await update.message.reply_text("🛒 Магазин всегда доступен внизу экрана.")
+    context.chat_data["catalog_prompt_message_id"] = prompt.message_id
+    context.chat_data["catalog_prompt_chat_id"] = update.effective_chat.id
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -321,18 +317,25 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def remove_catalog_prompt(context, user_data=None):
-    # Remove the launch prompt in the background so menu callbacks are not
-    # delayed by Telegram's deleteMessage network request.
+async def remove_catalog_prompt(context):
     message_id = context.chat_data.pop("catalog_prompt_message_id", None)
     chat_id = context.chat_data.pop("catalog_prompt_chat_id", None)
     if message_id and chat_id:
-        async def delete_prompt():
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-            except Exception:
-                log.debug("Catalog prompt already removed or cannot be deleted")
-        context.application.create_task(delete_prompt())
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            log.debug("Catalog prompt already removed or cannot be deleted")
+
+
+async def show_catalog_prompt(chat_id, context):
+    # Keep exactly one prompt message per chat.
+    await remove_catalog_prompt(context)
+    msg = await context.bot.send_message(
+        chat_id=chat_id,
+        text="Нажми кнопку «Магазин» внизу, чтобы открыть каталог и оформить заказ."
+    )
+    context.chat_data["catalog_prompt_message_id"] = msg.message_id
+    context.chat_data["catalog_prompt_chat_id"] = chat_id
 
 
 
@@ -341,12 +344,14 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     data = q.data
+    await remove_catalog_prompt(context)
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
+        await show_catalog_prompt(update.effective_chat.id, context)
     elif data in ("catalog", "delivery", "contact"):
         if data == "catalog":
             await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
