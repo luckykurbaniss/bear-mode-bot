@@ -288,7 +288,7 @@ def catalog_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     welcome = (
-        "🐻 *BEAR MODE — еда с характером!*\n\n"
+        "🐻 *BEAR MODE — еда с характером! 🐼*\n\n"
         "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
