@@ -896,6 +896,9 @@ async def main():
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
+    # Ensure Telegram is not holding updates for a webhook while this bot uses polling.
+    await app.bot.delete_webhook(drop_pending_updates=False)
+    print("BEAR MODE: webhook cleared; pending updates preserved.", flush=True)
     await app.start()
     await app.updater.start_polling()
     print("BEAR MODE: Telegram polling started.", flush=True)
