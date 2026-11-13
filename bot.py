@@ -491,7 +491,6 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
     if not message or not message.web_app_data:
         return
 
-    # Prices are authoritative on the bot, never accepted from the web page.
     catalog_prices = {
         "set_1": ("Сет Энергия", PRICE), "set_2": ("Сет Атлантика", PRICE),
         "set_3": ("Сет Комфорт", PRICE), "set_4": ("Сет Характер", PRICE),
@@ -511,19 +510,16 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         "mors": ("Морс", 20000),
         "baguette": ("Багет", 15000),
     }
-
     try:
         order = json.loads(message.web_app_data.data)
         if order.get("type") != "bear_mode_order":
             raise ValueError("Unknown order type")
-
         customer_name = str(order.get("customer_name", "")).strip()
         phone = str(order.get("phone", "")).strip()
         address = str(order.get("address", "")).strip()
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
         items = order.get("items", [])
-
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
         if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
@@ -537,10 +533,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if not isinstance(items, list) or not 1 <= len(items) <= len(catalog_prices):
             raise ValueError("The order must contain at least one valid item")
 
-        lines = []
-        saved_items = []
-        total = 0
-        seen_ids = set()
+        lines, saved_items, total, seen_ids = [], [], 0, set()
         for entry in items:
             if not isinstance(entry, dict):
                 raise ValueError("Invalid order item")
@@ -567,38 +560,23 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
 
         user = update.effective_user
         admin_text = (
-            "🐻 НОВЫЙ ЗАКАЗ САЙТА!
-
-"
-            + "
-".join(lines)
-            + f"
-
-💰 ИТОГО: {total:,} ₫".replace(",", ".")
-            + f"
-
-👤 Имя: {customer_name}"
-            + f"
-📱 Телефон: {phone}"
-            + f"
-📍 Адрес: {address}"
-            + f"
-📅 Дата доставки: {delivery_date}"
-            + f"
-💬 Комментарий: {comment or 'Нет'}"
+            "🐻 НОВЫЙ ЗАКАЗ САЙТА!\n\n"
+            + "\n".join(lines)
+            + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
+            + f"\n\n👤 Имя: {customer_name}"
+            + f"\n📱 Телефон: {phone}"
+            + f"\n📍 Адрес: {address}"
+            + f"\n📅 Дата доставки: {delivery_date}"
+            + f"\n💬 Комментарий: {comment or 'Нет'}"
         )
         if user:
-            admin_text += f"
-
-Telegram клиента: {('@' + user.username) if user.username else user.id}"
+            admin_text += f"\n\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
 
         order_id = save_order(
             user.id if user else None, customer_name, phone, address,
             delivery_date, "", comment, ", ".join(saved_items), total
         )
-        admin_text = f"🧾 Номер заказа: №{order_id}
-
-" + admin_text
+        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
         try:
             await context.bot.send_message(
                 chat_id=int(ADMIN_CHAT_ID),
@@ -611,11 +589,9 @@ Telegram клиента: {('@' + user.username) if user.username else user.id}"
             delete_order(order_id)
             raise
         await message.reply_text(
-            "🎉 Заказ отправлен! Спасибо!
-"
+            "🎉 Заказ отправлен! Спасибо!\n"
             "Мы скоро свяжемся с вами для подтверждения доставки."
         )
-
     except (ValueError, TypeError, json.JSONDecodeError):
         log.exception("Invalid order received from website")
         await message.reply_text(
