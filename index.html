@@ -24,7 +24,7 @@
 <h3 class="section-title">🐼 Собери свой сет из любимых блюд</h3><p class="note" style="margin:0 2px 12px">Заказывай отдельные блюда или собери собственный набор. Цена каждой позиции указана под фото</p><section class="ingredients" id="ingredients"></section>
 <div class="cartbar" id="openCart"><div><b>🛒 Корзина</b><small id="summary">Пока ничего не выбрано</small></div><div class="count" id="count">0</div></div><p class="note" style="text-align:center">Стоимость и возможность доставки подтвердим после получения адреса и выбранной даты.</p></main>
 <div class="overlay" id="overlay"><section class="sheet"><div class="sheethead"><h2>Оформление заказа</h2><button class="close" id="close" type="button">×</button></div><div id="cartItems"></div><div class="total"><span>Итого к оплате</span><span id="total">0 ₫</span></div>
-<form id="orderForm"><label>Ваше имя</label><input id="name" required maxlength="80" placeholder="Как к вам обращаться?"><label>Телефон</label><input id="phone" type="tel" required maxlength="30" placeholder="+84 ..."><label>Адрес доставки в Нячанге</label><textarea id="address" required maxlength="400" placeholder="Район, улица, дом, квартира"></textarea><label>Дата доставки</label><input id="date" type="date" required><label>Комментарий к заказу</label><textarea id="comment" maxlength="500" placeholder="Например: позвонить при доставке"></textarea><button class="btn primary" type="submit">🐼 Отправить заказ</button><p class="note">После отправки заказ поступит администратору BEAR MODE в Telegram. Мы свяжемся с вами для подтверждения деталей и стоимости доставки.</p></form></section></div><div class="image-viewer" id="imageViewer" role="dialog" aria-modal="true" aria-label="Просмотр изображения"><button class="image-viewer-close" id="imageViewerClose" type="button" aria-label="Закрыть">×</button><img id="imageViewerImg" alt=""></div><div class="toast" id="toast"></div>
+<form id="orderForm"><label>Ваше имя</label><input id="name" required maxlength="80" placeholder="Как к вам обращаться?"><label>Телефон</label><input id="phone" type="tel" required maxlength="30" placeholder="+84 ..."><label>Адрес доставки в Нячанге</label><textarea id="address" required maxlength="400" placeholder="Район, улица, дом, квартира"></textarea><label>Дата доставки</label><input id="date" type="date" required><label>Комментарий к заказу</label><textarea id="comment" maxlength="500" placeholder="Например: позвонить при доставке"></textarea><button class="btn primary" type="submit">🐻 Отправить заказ</button><p class="note">После отправки заказ поступит администратору BEAR MODE в Telegram. Мы свяжемся с вами для подтверждения деталей и стоимости доставки.</p></form></section></div><div class="image-viewer" id="imageViewer" role="dialog" aria-modal="true" aria-label="Просмотр изображения"><button class="image-viewer-close" id="imageViewerClose" type="button" aria-label="Закрыть">×</button><img id="imageViewerImg" alt=""></div><div class="toast" id="toast"></div>
 <script>
 const tg=window.Telegram?.WebApp;
 // Expand the shop whenever Telegram opens it or restores a smaller viewport.
@@ -101,7 +101,7 @@ $('orderForm').onsubmit=async e=>{
   setTimeout(()=>tg.close(),900);
  }catch(err){
   console.error('Order submission failed:',err);
-  submitButton.disabled=false;submitButton.textContent='🐼 Отправить заказ';
+  submitButton.disabled=false;submitButton.textContent='🐻 Отправить заказ';
   toast(err.message||'Не удалось отправить заказ. Напишите @lucky_ranger');
  }
 };
