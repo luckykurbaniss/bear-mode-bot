@@ -308,15 +308,17 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def remove_catalog_prompt(context, user_data=None):
-    # The launch prompt is tracked per chat (not per user_data) so it is
-    # consistently removed/restored across menu navigation and repeated /start.
+    # Remove the launch prompt in the background so menu callbacks are not
+    # delayed by Telegram's deleteMessage network request.
     message_id = context.chat_data.pop("catalog_prompt_message_id", None)
     chat_id = context.chat_data.pop("catalog_prompt_chat_id", None)
     if message_id and chat_id:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except Exception:
-            log.debug("Catalog prompt already removed or cannot be deleted")
+        async def delete_prompt():
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            except Exception:
+                log.debug("Catalog prompt already removed or cannot be deleted")
+        context.application.create_task(delete_prompt())
 
 
 async def show_catalog_prompt(context, chat_id):
