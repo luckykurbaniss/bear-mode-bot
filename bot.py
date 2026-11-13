@@ -321,6 +321,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
+    await set_shop_hint_visibility(context, True, update.effective_chat.id)
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -404,6 +405,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
+        await set_shop_hint_visibility(context, True, q.message.chat_id)
 
 
     elif data in ("catalog", "delivery", "contact"):
@@ -435,7 +437,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
 
-
+        await set_shop_hint_visibility(context, False, q.message.chat_id)
 
     return ConversationHandler.END
 
