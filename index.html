@@ -63,7 +63,7 @@ const dishes=[
 ];
 const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
 const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/[\u00a0\u202f]/g,'.')+' ₫';
-const cartStorageKey='bearModeCart:'+String(tg?.initDataUnsafe?.user?.id||'guest');
+const cartStorageKey='bearModeCart_'+String(tg?.initDataUnsafe?.user?.id||'guest');
 function render(){
  $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
  $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
