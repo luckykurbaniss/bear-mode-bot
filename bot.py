@@ -299,14 +299,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonWebApp(
-            text="🛒 Магазин",
+            text="🛒 Оформить заказ",
             web_app=WebAppInfo(url=WEB_APP_URL)
         )
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    prompt = await update.message.reply_text("Нажми кнопку «Магазин» внизу, чтобы открыть каталог и оформить заказ.")
-    context.chat_data["catalog_prompt_message_id"] = prompt.message_id
-    context.chat_data["catalog_prompt_chat_id"] = update.effective_chat.id
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -350,7 +347,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await show_catalog_prompt(update.effective_chat.id, context)
     elif data in ("catalog", "delivery", "contact"):
         if data == "catalog":
             await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
