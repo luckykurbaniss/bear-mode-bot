@@ -402,7 +402,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_catalog_prompt(context)
         context.user_data.clear()
         await q.edit_message_text(
-            "🐻 *BEAR MODE*\\nВыбирай, что будем делать:",
+            "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
         await set_shop_hint_visibility(context, True, q.message.chat_id)
@@ -422,8 +422,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         elif data == "delivery":
             await q.edit_message_text(
-                "🚚 *Доставка BEAR MODE*\\n\\n"
-                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\\n"
+                "🚚 *Доставка BEAR MODE*\n\n"
+                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\n"
                 "Нажми «Выбрать сет», чтобы оформить заказ.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
