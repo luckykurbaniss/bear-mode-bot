@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp, ReplyKeyboardRemove
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonCommands, KeyboardButton, ReplyKeyboardMarkup
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -293,11 +293,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
+    # Restore the keyboard-button Mini App flow: sendData works from this launch mode.
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
-        menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
+        menu_button=MenuButtonCommands()
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
+    shop_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        resize_keyboard=True,
+        is_persistent=True
+    )
+    await update.message.reply_text(
+        "Нажми кнопку ниже, чтобы открыть меню и оформить заказ:",
+        reply_markup=shop_keyboard
+    )
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -804,14 +814,7 @@ async def main():
     await app.updater.start_polling()
     print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # Configure the Telegram chat-menu button. Failure here must not stop polling.
-    try:
-        await app.bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
-        )
-        print("BEAR MODE: Telegram shop button configured.", flush=True)
-    except Exception:
-        log.exception("Could not configure Telegram shop button; bot polling remains active")
+    # Mini App is launched from the reply keyboard in /start; no global menu-button setup needed.
 
     runner = None
     try:
