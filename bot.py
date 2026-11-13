@@ -375,6 +375,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    await remove_catalog_prompt(context)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
@@ -392,6 +393,7 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    await remove_catalog_prompt(context)
     if q.data == "catalog":
         await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
         return SET
