@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp, ReplyKeyboardRemove
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -294,17 +294,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Persistent Telegram menu button opens the shop; the site uses its secure API fallback
-    # because sendData is not supported for Mini Apps launched from the menu button.
-    await context.bot.set_chat_menu_button(
-        chat_id=update.effective_chat.id,
-        menu_button=MenuButtonWebApp(
-            text="Магазин",
-            web_app=WebAppInfo(url=WEB_APP_URL)
-        )
+    # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
+    shop_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        resize_keyboard=True,
+        is_persistent=True,
+        input_field_placeholder="Откройте магазин BEAR MODE"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    await update.message.reply_text(" ", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("🛒 Магазин всегда доступен на кнопке внизу.", reply_markup=shop_keyboard)
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -821,38 +819,11 @@ async def main():
     await app.updater.start_polling()
     print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # Mini App is launched from the reply keyboard in /start; no global menu-button setup needed.
-
-    runner = None
-    try:
-        api = web.Application(client_max_size=64 * 1024)
-        api["bot"] = app.bot
-        api.router.add_get("/health", health_api)
-        api.router.add_route("OPTIONS", "/api/order", order_api)
-        api.router.add_post("/api/order", order_api)
-        print(f"BEAR MODE: preparing order API on 0.0.0.0:{API_PORT}...", flush=True)
-        runner = web.AppRunner(api)
-        await runner.setup()
-        site = web.TCPSite(runner, "0.0.0.0", API_PORT)
-        await site.start()
-        print(f"BEAR MODE: order API listening on 0.0.0.0:{API_PORT}.", flush=True)
-        print(f"BEAR MODE: health check at /health; allowed origin: {ALLOWED_WEB_ORIGIN}", flush=True)
-    except Exception:
-        log.exception("FATAL: ORDER API FAILED TO START on port %s. The shop cannot accept orders.", API_PORT)
-        if runner:
-            await runner.cleanup()
-        # Do not leave Telegram showing a healthy bot while its order API is offline.
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
-        raise
-
-    print("BEAR MODE: startup complete; Telegram bot and order API are both online.", flush=True)
+    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
+    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
-        if runner:
-            await runner.cleanup()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
