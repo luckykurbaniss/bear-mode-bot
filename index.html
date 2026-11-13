@@ -80,19 +80,41 @@ let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60
 $('orderForm').onsubmit=async e=>{
  e.preventDefault();
  if(!Object.keys(cart).length)return toast('Корзина пуста');
- if(!tg||!tg.sendData){toast('Открой меню кнопкой «Открыть меню и заказать» внизу чата с ботом.');return}
  const submitButton=$('orderForm').querySelector('button[type="submit"]');
  if(submitButton.disabled)return;
  const order={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim()};
  submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';
  try{
-  tg.sendData(JSON.stringify(order));
+  // Preferred route: Telegram service message from a Reply Keyboard Mini App.
+  if(tg&&typeof tg.sendData==='function'){
+   try{
+    tg.sendData(JSON.stringify(order));
+    submitButton.textContent='Заказ отправлен! 🐼';
+    toast('Заказ передан Telegram-боту. Дождись подтверждения в чате.');
+    setTimeout(()=>tg.close(),900);
+    return;
+   }catch(sendDataError){
+    console.warn('Telegram sendData unavailable; trying secure order API',sendDataError);
+   }
+  }
+  // Fallback route: authenticated Mini App request to the bot's HOKAS API.
+  if(!tg||!tg.initData){
+   throw new Error('Открой магазин из Telegram, чтобы отправить заказ.');
+  }
+  const response=await fetch('https://bear-mode-bot-d2e84d.subhub.tr/api/order',{
+   method:'POST',
+   headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},
+   body:JSON.stringify(order)
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.ok)throw new Error(result.error||'Сервер не принял заказ.');
   submitButton.textContent='Заказ отправлен! 🐼';
-  toast('Заказ передан боту. Дождись сообщения с подтверждением.');
-  setTimeout(()=>tg.close(),900);
+  toast('Заказ №'+result.order_id+' отправлен. Проверь сообщения от BEAR MODE.');
+  setTimeout(()=>tg.close(),1200);
  }catch(err){
+  console.error('Order submission failed:',err);
   submitButton.disabled=false;submitButton.textContent='🐼 Отправить заказ';
-  toast('Не удалось передать заказ боту. Напишите @lucky_ranger');
+  toast(err.message||'Не удалось отправить заказ. Напишите @lucky_ranger');
  }
 };
 render();update();
