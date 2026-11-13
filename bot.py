@@ -316,7 +316,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    # Show the shop reminder after the menu, including the "Связаться" button.
+    # Recreate the shop reminder on every /start so stale saved message IDs
+    # cannot prevent it from appearing in the welcome flow.
+    await remove_shop_hint(context)
     await set_shop_hint_visibility(context, True, update.effective_chat.id)
 
     # Clean up old temporary messages only after the /start response is delivered.
