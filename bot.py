@@ -302,8 +302,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonDefault()
     )
+    # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-2"
     shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=WEB_APP_URL))]],
+        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
         resize_keyboard=True,
         is_persistent=True,
         input_field_placeholder="Откройте магазин BEAR MODE"
