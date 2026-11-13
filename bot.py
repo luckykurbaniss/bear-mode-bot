@@ -7,7 +7,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
-    KeyboardButton, ReplyKeyboardMarkup
+    MenuButtonWebApp
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -286,18 +286,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🐻 *BEAR MODE — еда с характером!*\n\n"
         "Сытные домашние сеты в Нячанге 🇻🇳\n"
         "Выбирай свой вариант, оформляй заказ — приготовим и доставим!\n\n"
-        "🔥 4 сета на выбор • 170.000 ₫ за сет\n\n"
-        "Или открой полный каталог и оформи заказ здесь:"
+        "🔥 4 сета на выбор • 170.000 ₫ за сет"
     )
-    welcome = await update.message.reply_text(
-        text + "\n\n🌐 Кнопка полного каталога находится внизу экрана.",
+    await update.message.reply_text(
+        text,
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    context.user_data["welcome_message_id"] = welcome.message_id
-    context.user_data["welcome_chat_id"] = welcome.chat_id
-    # Show one launch prompt after /start.
-    await show_catalog_prompt(context, update.effective_chat.id)
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -321,29 +316,6 @@ async def remove_catalog_prompt(context, user_data=None):
         context.application.create_task(delete_prompt())
 
 
-async def show_catalog_prompt(context, chat_id):
-    # Never create a second prompt if one is already present.
-    message_id = context.chat_data.get("catalog_prompt_message_id")
-    if message_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id, message_id=message_id,
-                text="Открыть полный каталог:"
-            )
-            return
-        except Exception:
-            context.chat_data.pop("catalog_prompt_message_id", None)
-            context.chat_data.pop("catalog_prompt_chat_id", None)
-
-    markup = ReplyKeyboardMarkup(
-        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
-        resize_keyboard=True, one_time_keyboard=False, is_persistent=True
-    )
-    prompt = await context.bot.send_message(
-        chat_id=chat_id, text="Открыть полный каталог:", reply_markup=markup
-    )
-    context.chat_data["catalog_prompt_message_id"] = prompt.message_id
-    context.chat_data["catalog_prompt_chat_id"] = chat_id
 
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -351,16 +323,12 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     data = q.data
     if data == "home":
-        # Restore the single catalog prompt only when returning to the main menu.
         context.user_data.clear()
         await q.edit_message_text(
             "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await show_catalog_prompt(context, update.effective_chat.id)
     elif data in ("catalog", "delivery", "contact"):
-        # Hide the separate catalog prompt while the customer is inside a section.
-        await remove_catalog_prompt(context)
         if data == "catalog":
             await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
         elif data == "delivery":
@@ -696,6 +664,14 @@ async def main():
     )
 
     await app.initialize()
+    # Use Telegram's native chat menu button, like the "Магазин" button in the example.
+    # This replaces all extra catalog prompt messages and stays available in every menu.
+    await app.bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="Магазин",
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+    )
     await app.start()
     await app.updater.start_polling()
 
