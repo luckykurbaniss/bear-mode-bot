@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonCommands, KeyboardButton, ReplyKeyboardMarkup
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp, KeyboardButton, ReplyKeyboardMarkup
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -293,10 +293,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Restore the keyboard-button Mini App flow: sendData works from this launch mode.
+    # Persistent Telegram menu button opens the shop; the site uses its secure API fallback
+    # because sendData is not supported for Mini Apps launched from the menu button.
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
-        menu_button=MenuButtonCommands()
+        menu_button=MenuButtonWebApp(
+            text="🛒 Магазин",
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
     shop_keyboard = ReplyKeyboardMarkup(
