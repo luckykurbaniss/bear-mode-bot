@@ -390,10 +390,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["shop_hint_message_id"] = hint.message_id
         context.chat_data["shop_hint_chat_id"] = hint.chat_id
     elif data in ("catalog", "delivery", "contact"):
-        # Hide the shop launcher while the user is navigating the bot's inline menu.
+        # Hide the persistent shop keyboard without showing a visible menu notice.
         await context.bot.send_message(
             chat_id=q.message.chat_id,
-            text="📋 Меню бота",
+            text="\u2060",
             reply_markup=ReplyKeyboardRemove()
         )
         if data == "catalog":
