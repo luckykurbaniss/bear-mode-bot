@@ -486,10 +486,31 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Receive an order submitted by the BEAR MODE website via Telegram Web App."""
+    """Validate and forward set and individual-dish orders from the Mini App."""
     message = update.effective_message
     if not message or not message.web_app_data:
         return
+
+    # Prices are authoritative on the bot, never accepted from the web page.
+    catalog_prices = {
+        "set_1": ("Сет Энергия", PRICE), "set_2": ("Сет Атлантика", PRICE),
+        "set_3": ("Сет Комфорт", PRICE), "set_4": ("Сет Характер", PRICE),
+        "buckwheat": ("Гречка с грибами", 30000),
+        "rice": ("Рис с овощами", 30000),
+        "potato": ("Картофельное пюре", 30000),
+        "chicken_breast": ("Куриная грудка", 60000),
+        "salmon": ("Лосось", 80000),
+        "cutlets": ("Домашние котлеты (2 шт.)", 65000),
+        "chicken_thigh": ("Куриное бедро", 60000),
+        "vegetable_salad": ("Овощной салат", 35000),
+        "freshness_salad": ("Салат «Свежесть»", 35000),
+        "vitamin_salad": ("Витаминный салат", 35000),
+        "omelet": ("Омлет", 20000),
+        "egg": ("Яйцо отварное", 15000),
+        "banana": ("Мини-банан", 10000),
+        "mors": ("Морс", 20000),
+        "baguette": ("Багет", 15000),
+    }
 
     try:
         order = json.loads(message.web_app_data.data)
@@ -500,7 +521,6 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         phone = str(order.get("phone", "")).strip()
         address = str(order.get("address", "")).strip()
         delivery_date = str(order.get("delivery_date", "")).strip()
-        delivery_time = str(order.get("delivery_time", "")).strip()
         comment = str(order.get("comment", "")).strip()
         items = order.get("items", [])
 
@@ -514,25 +534,28 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             raise ValueError("Invalid delivery date") from exc
         if requested_date < datetime.now(VN_TZ).date():
             raise ValueError("Delivery date cannot be in the past")
-        if not isinstance(items, list) or not 1 <= len(items) <= len(SETS):
-            raise ValueError("The order must contain between 1 and 4 set types")
+        if not isinstance(items, list) or not 1 <= len(items) <= len(catalog_prices):
+            raise ValueError("The order must contain at least one valid item")
 
         lines = []
+        saved_items = []
         total = 0
-        seen_set_ids = set()
+        seen_ids = set()
         for entry in items:
             if not isinstance(entry, dict):
                 raise ValueError("Invalid order item")
-            set_id = str(entry.get("id", ""))
-            if set_id not in SETS or set_id in seen_set_ids:
-                raise ValueError("Unknown or repeated set")
-            seen_set_ids.add(set_id)
+            item_id = str(entry.get("id", ""))
+            if item_id not in catalog_prices or item_id in seen_ids:
+                raise ValueError("Unknown or repeated catalog item")
+            seen_ids.add(item_id)
             quantity = int(entry.get("quantity", 0))
             if quantity < 1 or quantity > 100:
                 raise ValueError("Invalid quantity")
-            line_total = quantity * PRICE
+            item_name, unit_price = catalog_prices[item_id]
+            line_total = quantity * unit_price
             total += line_total
-            lines.append(f"🍱 {SETS[set_id]['name']} × {quantity} — {line_total:,} ₫".replace(",", "."))
+            lines.append(f"• {item_name} × {quantity} — {line_total:,} ₫".replace(",", "."))
+            saved_items.append(f"{item_name} × {quantity}")
 
         if not ADMIN_CHAT_ID:
             await message.reply_text(
@@ -544,39 +567,52 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
 
         user = update.effective_user
         admin_text = (
-            "🐻 НОВЫЙ ЗАКАЗ С САЙТА BEAR MODE!\n\n"
-            + "\n".join(lines)
-            + f"\n\n💰 Итого за сеты: {total:,} ₫".replace(",", ".")
-            + f"\n\n👤 Имя: {customer_name}"
-            + f"\n📱 Телефон: {phone}"
-            + f"\n📍 Адрес: {address}"
-            + f"\n📅 Дата доставки: {delivery_date}"
+            "🐻 НОВЫЙ ЗАКАЗ САЙТА!
 
-            + f"\n💬 Комментарий: {comment or 'Нет'}"
+"
+            + "
+".join(lines)
+            + f"
+
+💰 ИТОГО: {total:,} ₫".replace(",", ".")
+            + f"
+
+👤 Имя: {customer_name}"
+            + f"
+📱 Телефон: {phone}"
+            + f"
+📍 Адрес: {address}"
+            + f"
+📅 Дата доставки: {delivery_date}"
+            + f"
+💬 Комментарий: {comment or 'Нет'}"
         )
         if user:
-            admin_text += f"\n\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
+            admin_text += f"
 
-        items_text = ", ".join(
-            f"{SETS[str(entry['id'])]['name']} × {int(entry['quantity'])}"
-            for entry in items
-        )
+Telegram клиента: {('@' + user.username) if user.username else user.id}"
+
         order_id = save_order(
             user.id if user else None, customer_name, phone, address,
-            delivery_date, delivery_time, comment, items_text, total
+            delivery_date, "", comment, ", ".join(saved_items), total
         )
-        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
+        admin_text = f"🧾 Номер заказа: №{order_id}
+
+" + admin_text
         try:
             await context.bot.send_message(
                 chat_id=int(ADMIN_CHAT_ID),
                 text=admin_text,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]])
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
+                ]])
             )
         except Exception:
             delete_order(order_id)
             raise
         await message.reply_text(
-            "🎉 Заказ отправлен! Спасибо!\n"
+            "🎉 Заказ отправлен! Спасибо!
+"
             "Мы скоро свяжемся с вами для подтверждения доставки."
         )
 
