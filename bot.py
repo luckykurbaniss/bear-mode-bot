@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp, KeyboardButton, ReplyKeyboardMarkup
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp, ReplyKeyboardRemove
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -304,6 +304,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
+    await update.message.reply_text(" ", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
