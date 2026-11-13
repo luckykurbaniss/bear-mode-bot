@@ -78,24 +78,48 @@ function update(){
 }
 function storageGetCart(){
  return new Promise(resolve=>{
+  // The local copy is written synchronously on every cart change. Prefer it
+  // over Telegram storage so an older cloud snapshot cannot replace newer items.
   try{
-   if(tg?.CloudStorage?.getItem){tg.CloudStorage.getItem('bearModeCart',(err,value)=>{if(!err&&value){resolve(value);return}try{resolve(localStorage.getItem('bearModeCart'))}catch(e){resolve(null)}});return}
-   if(tg?.DeviceStorage?.getItem){tg.DeviceStorage.getItem('bearModeCart',(err,value)=>{if(!err&&value){resolve(value);return}try{resolve(localStorage.getItem('bearModeCart'))}catch(e){resolve(null)}});return}
-   resolve(localStorage.getItem('bearModeCart'));
-  }catch(e){resolve(localStorage.getItem('bearModeCart'))}
+   const local=localStorage.getItem('bearModeCart');
+   if(local!==null){resolve(local);return}
+  }catch(e){}
+  const readTelegram=(api)=>{
+   if(!api?.getItem)return false;
+   try{
+    api.getItem('bearModeCart',(err,value)=>{
+     if(!err&&value){
+      try{localStorage.setItem('bearModeCart',value)}catch(e){}
+      resolve(value);
+     }else resolve('{}');
+    });
+    return true;
+   }catch(e){return false}
+  };
+  if(readTelegram(tg?.CloudStorage))return;
+  if(readTelegram(tg?.DeviceStorage))return;
+  resolve('{}');
  })
 }
 let cartSaveQueue=Promise.resolve();
 function saveCloudCart(){
  const value=JSON.stringify(cart);
- try{localStorage.setItem('bearModeCart',value)}catch(e){}
- cartSaveQueue=cartSaveQueue.then(()=>new Promise(resolve=>{
-  try{
-   if(tg?.CloudStorage?.setItem){tg.CloudStorage.setItem('bearModeCart',value,err=>{if(err)console.warn('Telegram CloudStorage save failed',err);resolve(!err);});return}
-   if(tg?.DeviceStorage?.setItem){tg.DeviceStorage.setItem('bearModeCart',value,err=>{if(err)console.warn('Telegram DeviceStorage save failed',err);resolve(!err);});return}
-   resolve(false);
-  }catch(e){console.warn('Telegram cart storage unavailable',e);resolve(false)}
- }));
+ // Save locally immediately: this survives closing and reopening the Mini App.
+ try{localStorage.setItem('bearModeCart',value)}catch(e){console.warn('Local cart save failed',e)}
+ cartSaveQueue=cartSaveQueue.then(async()=>{
+  const write=(api,label)=>new Promise(resolve=>{
+   if(!api?.setItem){resolve(false);return}
+   try{
+    api.setItem('bearModeCart',value,err=>{
+     if(err)console.warn(label+' cart save failed',err);
+     resolve(!err);
+    });
+   }catch(e){console.warn(label+' cart storage unavailable',e);resolve(false)}
+  });
+  // Keep both Telegram stores in sync when the client supports them.
+  await write(tg?.CloudStorage,'Telegram CloudStorage');
+  await write(tg?.DeviceStorage,'Telegram DeviceStorage');
+ });
  return cartSaveQueue;
 }
 const cartReady=(async()=>{
@@ -125,8 +149,10 @@ $('orderForm').onsubmit=async e=>{
   }
   // sendData does not require initData; Telegram delivers this payload as web_app_data to the bot.
   tg.sendData(JSON.stringify(order));
-  try{localStorage.removeItem('bearModeCart')}catch(e){}
+  // Keep an explicit empty local cart so an old Telegram snapshot is never restored.
+  try{localStorage.setItem('bearModeCart','{}')}catch(e){}
   if(tg?.CloudStorage?.removeItem)tg.CloudStorage.removeItem('bearModeCart',err=>{if(err)console.warn('Cloud cart clear failed',err)});
+  if(tg?.DeviceStorage?.removeItem)tg.DeviceStorage.removeItem('bearModeCart',err=>{if(err)console.warn('Device cart clear failed',err)});
   submitButton.textContent='Заказ отправлен! 🐼';
   toast('Заказ передан боту. Дождись подтверждения в Telegram.');
   setTimeout(()=>tg.close(),900);
