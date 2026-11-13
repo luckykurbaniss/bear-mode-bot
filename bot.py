@@ -296,6 +296,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
     # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
+    # Reset both the bot-wide and this chat's custom menu button.
+    await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonDefault()
