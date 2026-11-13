@@ -287,6 +287,7 @@ def catalog_keyboard():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await remove_catalog_prompt(context)
+    await remove_shop_hint(context)
     context.user_data.clear()
     welcome = (
         "🐻 *BEAR MODE — еда с характером! 🐼*\n\n"
@@ -311,7 +312,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         input_field_placeholder="Откройте магазин BEAR MODE"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    await update.message.reply_text("🛒 Магазин всегда доступен на кнопке внизу.", reply_markup=shop_keyboard)
+    hint = await update.message.reply_text(
+        "🛒 Магазин всегда доступен на кнопке внизу.",
+        reply_markup=shop_keyboard
+    )
+    context.chat_data["shop_hint_message_id"] = hint.message_id
+    context.chat_data["shop_hint_chat_id"] = hint.chat_id
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -329,6 +335,16 @@ async def remove_catalog_prompt(context):
             await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
         except Exception:
             log.debug("Catalog prompt already removed or cannot be deleted")
+
+
+async def remove_shop_hint(context):
+    message_id = context.chat_data.pop("shop_hint_message_id", None)
+    chat_id = context.chat_data.pop("shop_hint_chat_id", None)
+    if message_id and chat_id:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        except Exception:
+            log.debug("Shop hint already removed or cannot be deleted")
 
 
 async def show_catalog_prompt(chat_id, context):
@@ -349,6 +365,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     data = q.data
     await remove_catalog_prompt(context)
+    if data != "home":
+        await remove_shop_hint(context)
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
@@ -363,11 +381,14 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_persistent=True,
             input_field_placeholder="Откройте магазин BEAR MODE"
         )
-        await context.bot.send_message(
+        await remove_shop_hint(context)
+        hint = await context.bot.send_message(
             chat_id=q.message.chat_id,
-            text="🛒 Магазин снова доступен ниже.",
+            text="🛒 Магазин всегда доступен на кнопке внизу.",
             reply_markup=shop_keyboard
         )
+        context.chat_data["shop_hint_message_id"] = hint.message_id
+        context.chat_data["shop_hint_chat_id"] = hint.chat_id
     elif data in ("catalog", "delivery", "contact"):
         # Hide the shop launcher while the user is navigating the bot's inline menu.
         await context.bot.send_message(
