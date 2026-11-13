@@ -619,7 +619,7 @@ def validate_telegram_init_data(init_data: str):
     received_hash = parsed.pop("hash", "")
     if not received_hash:
         raise ValueError("Missing initData hash")
-    check_string = "\\n".join(f"{key}={value}" for key, value in sorted(parsed.items()))
+    check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed.items()))
     secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
     calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(calculated_hash, received_hash):
@@ -696,12 +696,12 @@ async def order_api(request):
             "", comment, ", ".join(saved_items), total
         )
         admin_text = (
-            f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\\n\\n" + "\\n".join(lines)
-            + f"\\n\\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
-            + f"\\n\\n👤 Имя: {customer_name}\\n📱 Телефон: {phone}"
-            + f"\\n📍 Адрес: {address}\\n📅 Дата доставки: {delivery_date}"
-            + f"\\n💬 Комментарий: {comment or 'Нет'}"
-            + f"\\n\\nTelegram клиента: {('@' + user['username']) if user.get('username') else user['id']}"
+            f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
+            + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
+            + f"\n\n👤 Имя: {customer_name}\n📱 Телефон: {phone}"
+            + f"\n📍 Адрес: {address}\n📅 Дата доставки: {delivery_date}"
+            + f"\n💬 Комментарий: {comment or 'Нет'}"
+            + f"\n\nTelegram клиента: {('@' + user['username']) if user.get('username') else user['id']}"
         )
         try:
             await request.app["bot"].send_message(
