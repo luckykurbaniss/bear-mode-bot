@@ -385,9 +385,7 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
-    # Update the visible menu first so the customer gets an immediate response.
-    # Removing the separate Web App prompt is slower (another Telegram API call),
-    # so do it in the background after the selected set is already displayed.
+    await remove_catalog_prompt(context)
     context.user_data.clear()
     context.user_data["set_id"] = set_id
     await q.edit_message_text(
@@ -398,7 +396,6 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ К сетам", callback_data="catalog")]
         ])
     )
-    context.application.create_task(remove_catalog_prompt(context))
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
