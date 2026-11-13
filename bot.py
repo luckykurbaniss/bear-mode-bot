@@ -296,7 +296,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🐻 *BEAR MODE — еда с характером!*\n\n"
         "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
         "Выбирай готовый сет или собери свой заказ!\n\n"
-        "🔥 Готовые сеты — 170.000 ₫"
+        "🔥 Готовые сеты — 170.000 ₫\n\n"
+        "🐾 Магазин всегда под лапкой!\n"
+        "Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
     )
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
     shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
@@ -334,7 +336,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         log.exception("Could not reset Telegram menu button; /start response was sent")
 
-    await set_shop_hint_visibility(context, True, update.effective_chat.id)
+    # The shop hint is included in the first welcome message to avoid a delayed extra message.
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
