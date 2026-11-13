@@ -312,9 +312,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         input_field_placeholder="Откройте магазин BEAR MODE"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    hint = await update.message.reply_text(
-        "🛒 Магазин всегда доступен на кнопке внизу.",
+    # Keep the Web App reply keyboard on its own message; never delete this message
+    # during menu navigation, otherwise Telegram may hide the bottom shop button.
+    keyboard_message = await update.message.reply_text(
+        "🛒 Открыть магазин",
         reply_markup=shop_keyboard
+    )
+    context.chat_data["shop_keyboard_message_id"] = keyboard_message.message_id
+    context.chat_data["shop_keyboard_chat_id"] = keyboard_message.chat_id
+    hint = await update.message.reply_text(
+        "Магазин всегда доступен на кнопке внизу."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
@@ -342,7 +349,6 @@ async def set_shop_hint_visibility(context, visible, chat_id):
     saved_chat_id = context.chat_data.get("shop_hint_chat_id")
 
     if not visible:
-        # Remove only the hint message; leave the persistent shop reply keyboard untouched.
         if message_id and saved_chat_id:
             try:
                 await context.bot.delete_message(
@@ -355,21 +361,13 @@ async def set_shop_hint_visibility(context, visible, chat_id):
         context.chat_data.pop("shop_hint_chat_id", None)
         return
 
-    # On return to the main menu, create one fresh hint and remember its ID.
+    # Restore only the temporary hint. The separate Web App keyboard message
+    # remains untouched, so the bottom button stays available in every section.
     if message_id and saved_chat_id:
         return
-
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
-    shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-        resize_keyboard=True,
-        is_persistent=True,
-        input_field_placeholder="Откройте магазин BEAR MODE"
-    )
     hint = await context.bot.send_message(
         chat_id=chat_id,
-        text="🛒 Магазин всегда доступен на кнопке внизу.",
-        reply_markup=shop_keyboard
+        text="Магазин всегда доступен на кнопке внизу."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
