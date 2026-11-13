@@ -304,8 +304,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    await update.message.reply_text("Нажми кнопку «Магазин» внизу, чтобы открыть каталог и оформить заказ.")
-    prompt = await update.message.reply_text("🛒 Магазин всегда доступен внизу экрана.")
+    prompt = await update.message.reply_text("Нажми кнопку «Магазин» внизу, чтобы открыть каталог и оформить заказ.")
     context.chat_data["catalog_prompt_message_id"] = prompt.message_id
     context.chat_data["catalog_prompt_chat_id"] = update.effective_chat.id
     return ConversationHandler.END
