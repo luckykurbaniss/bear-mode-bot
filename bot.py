@@ -297,7 +297,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
     )
-    await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
