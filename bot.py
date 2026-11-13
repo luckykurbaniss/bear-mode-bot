@@ -296,9 +296,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🐻 *BEAR MODE — еда с характером!*\n\n"
         "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
         "Выбирай готовый сет или собери свой заказ!\n\n"
-        "🔥 Готовые сеты — 170.000 ₫\n\n"
-        "🐾 Магазин всегда под лапкой!\n"
-        "Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        "🔥 Готовые сеты — 170.000 ₫"
     )
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
     shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
@@ -318,11 +316,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
+    # Show the shop reminder after the menu, including the "Связаться" button.
+    await set_shop_hint_visibility(context, True, update.effective_chat.id)
 
     # Clean up old temporary messages only after the /start response is delivered.
     try:
         await remove_catalog_prompt(context)
-        await remove_shop_hint(context)
     except Exception:
         log.exception("Could not clean up old menu messages; /start response was sent")
 
@@ -420,12 +419,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # sending a second message afterward. The persistent shop button
         # remains in the reply keyboard at the bottom of the chat.
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\n\n"
-            "🐾 Магазин всегда под лапкой!\n"
-            "Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        context.application.create_task(remove_shop_hint(context))
+        context.application.create_task(set_shop_hint_visibility(context, True, q.message.chat_id))
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
