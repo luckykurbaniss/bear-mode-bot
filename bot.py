@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -295,6 +295,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔥 Готовые сеты — 170.000 ₫"
     )
     # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
+    # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
+    await context.bot.set_chat_menu_button(
+        chat_id=update.effective_chat.id,
+        menu_button=MenuButtonDefault()
+    )
     shop_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=WEB_APP_URL))]],
         resize_keyboard=True,
