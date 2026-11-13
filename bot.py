@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = "5500196056"  # BEAR MODE admin Telegram chat
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
-API_PORT = 80  # HOKAS public subdomain routes traffic to port 80; ignore any injected PORT value.
+API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
@@ -837,12 +837,16 @@ async def main():
         print(f"BEAR MODE: order API listening on 0.0.0.0:{API_PORT}.", flush=True)
         print(f"BEAR MODE: health check at /health; allowed origin: {ALLOWED_WEB_ORIGIN}", flush=True)
     except Exception:
-        log.exception("ORDER API FAILED TO START on port %s; Telegram bot will keep running", API_PORT)
+        log.exception("FATAL: ORDER API FAILED TO START on port %s. The shop cannot accept orders.", API_PORT)
         if runner:
             await runner.cleanup()
-            runner = None
+        # Do not leave Telegram showing a healthy bot while its order API is offline.
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
+        raise
 
-    print("BEAR MODE: startup complete; waiting for Telegram updates.", flush=True)
+    print("BEAR MODE: startup complete; Telegram bot and order API are both online.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
