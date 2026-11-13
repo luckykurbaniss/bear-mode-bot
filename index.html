@@ -65,8 +65,8 @@ const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:P
 const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/[\u00a0\u202f]/g,'.')+' ₫';
 const cartStorageKey='bearModeCart:'+String(tg?.initDataUnsafe?.user?.id||'guest');
 function render(){
- $('products').innerHTML=sets.map((s,i)=>\`<article class="card"><div class="card-photo"><img src="\${s.photo}" alt="\${s.name}" loading="\${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>\${s.tag}</h3><div class="desc">\${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">\${money(PRICE)}</div><button class="btn" onclick="add('set_\${s.id}')">＋ Добавить в корзину</button></div></article>\`).join('');
- $('ingredients').innerHTML=dishes.map(d=>\`<div class="ingredient"><img src="\${d.photo}" alt="\${d.name}" loading="lazy" decoding="async"><span>\${d.name}<br><b style="color:var(--gold)">\${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('\${d.id}')">＋ Добавить</button></span></div>\`).join('');
+ $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
+ $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
 }
 function parseCartSnapshot(raw){
  if(!raw)return null;
@@ -137,8 +137,8 @@ async function change(id,d){
 }
 function update(){
  const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0);
- $('count').textContent=n;$('summary').textContent=n?\`\${n} поз. · \${money(sum)}\`:'Пока ничего не выбрано';$('total').textContent=money(sum);
- $('cartItems').innerHTML=n?entries.map(x=>\`<div class="row"><div><b>\${x.name}</b><br><span class="note">\${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('\${x.id}',-1)">−</button><b>\${cart[x.id]}</b><button type="button" onclick="change('\${x.id}',1)">＋</button></div></div>\`).join(''):'<div class="note">Корзина пока пуста.</div>';
+ $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);
+ $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>';
 }
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveCart()});
 window.addEventListener('pagehide',()=>saveCart());
