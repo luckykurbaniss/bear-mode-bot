@@ -794,30 +794,44 @@ async def main():
         CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
     )
 
+    print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
+    print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # Configure the single persistent Telegram chat-menu button.
-    await app.bot.set_chat_menu_button(
-        menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
-    )
+    # Configure the Telegram chat-menu button. Failure here must not stop polling.
+    try:
+        await app.bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
+        )
+        print("BEAR MODE: Telegram shop button configured.", flush=True)
+    except Exception:
+        log.exception("Could not configure Telegram shop button; bot polling remains active")
 
-    api = web.Application(client_max_size=64 * 1024)
-    api["bot"] = app.bot
-    api.router.add_route("OPTIONS", "/api/order", order_api)
-    api.router.add_post("/api/order", order_api)
-    runner = web.AppRunner(api)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", API_PORT)
-    await site.start()
+    runner = None
+    try:
+        api = web.Application(client_max_size=64 * 1024)
+        api["bot"] = app.bot
+        api.router.add_route("OPTIONS", "/api/order", order_api)
+        api.router.add_post("/api/order", order_api)
+        runner = web.AppRunner(api)
+        await runner.setup()
+        site = web.TCPSite(runner, "0.0.0.0", API_PORT)
+        await site.start()
+        print(f"BEAR MODE: order API listening on 0.0.0.0:{API_PORT}.", flush=True)
+    except Exception:
+        log.exception("ORDER API FAILED TO START on port %s; Telegram bot will keep running", API_PORT)
+        if runner:
+            await runner.cleanup()
+            runner = None
 
-    print(f"BEAR MODE bot and Mini App order API are running on port {API_PORT}!")
-
+    print("BEAR MODE: startup complete; waiting for Telegram updates.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
-        await runner.cleanup()
+        if runner:
+            await runner.cleanup()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
