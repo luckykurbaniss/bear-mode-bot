@@ -323,7 +323,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_keyboard()
     )
     hint = await update.message.reply_text(
-        "Магазин всегда доступен на кнопке внизу."
+        "🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
@@ -369,7 +369,7 @@ async def set_shop_hint_visibility(context, visible, chat_id):
         return
     hint = await context.bot.send_message(
         chat_id=chat_id,
-        text="Магазин всегда доступен на кнопке внизу."
+        text="🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
