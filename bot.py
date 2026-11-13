@@ -394,13 +394,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Show the requested section first; housekeeping runs in the background.
         context.application.create_task(remove_catalog_prompt(context))
         context.application.create_task(remove_shop_hint(context))
-        context.application.create_task(
-            context.bot.send_message(
-                chat_id=q.message.chat_id,
-                text="\\u2060",
-                reply_markup=ReplyKeyboardRemove()
-            )
-        )
+        # Do not send a blank Telegram message just to remove the reply keyboard.
 
         if data == "catalog":
             await q.edit_message_text(
