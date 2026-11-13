@@ -26,7 +26,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = "5500196056"  # BEAR MODE admin Telegram chat
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5500196056").strip()  # BEAR MODE admin Telegram chat
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
@@ -831,6 +831,22 @@ async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
+async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Confirm that Telegram polling and command handlers are alive."""
+    await update.effective_message.reply_text("🐻 BEAR MODE работает. Бот получает команды.")
+
+
+async def telegram_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    error = context.error
+    if error is not None:
+        log.error(
+            "Unhandled Telegram update error",
+            exc_info=(type(error), error, error.__traceback__)
+        )
+    else:
+        log.error("Telegram update failed without an exception object")
+
+
 async def main():
     if not BOT_TOKEN:
         raise RuntimeError("Set BOT_TOKEN in your environment variables.")
@@ -880,6 +896,7 @@ async def main():
 
     init_db()
     app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CommandHandler("ping", ping_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
@@ -893,6 +910,7 @@ async def main():
     app.add_handler(
         CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
     )
+    app.add_error_handler(telegram_error_handler)
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
@@ -900,7 +918,13 @@ async def main():
     await app.bot.delete_webhook(drop_pending_updates=False)
     print("BEAR MODE: webhook cleared; pending updates preserved.", flush=True)
     await app.start()
-    await app.updater.start_polling()
+    await app.updater.start_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=False,
+        timeout=30,
+        bootstrap_retries=5,
+        poll_interval=1.0,
+    )
     print("BEAR MODE: Telegram polling started.", flush=True)
 
     # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
