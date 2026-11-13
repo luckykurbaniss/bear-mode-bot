@@ -311,15 +311,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_persistent=True,
         input_field_placeholder="Откройте магазин BEAR MODE"
     )
-    await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_keyboard())
-    # Keep the Web App reply keyboard on its own message; never delete this message
-    # during menu navigation, otherwise Telegram may hide the bottom shop button.
-    keyboard_message = await update.message.reply_text(
-        "\\u2060",
+    # Attach the persistent shop keyboard to the existing welcome message.
+    await update.message.reply_text(
+        welcome,
+        parse_mode="Markdown",
         reply_markup=shop_keyboard
     )
-    context.chat_data["shop_keyboard_message_id"] = keyboard_message.message_id
-    context.chat_data["shop_keyboard_chat_id"] = keyboard_message.chat_id
+    await update.message.reply_text(
+        "🐻 *BEAR MODE*\\nВыбирай, что будем делать:",
+        parse_mode="Markdown",
+        reply_markup=main_keyboard()
+    )
     hint = await update.message.reply_text(
         "Магазин всегда доступен на кнопке внизу."
     )
