@@ -26,7 +26,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
+ADMIN_CHAT_ID = "5500196056"  # BEAR MODE admin Telegram chat
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 API_PORT = 80  # HOKAS public subdomain routes traffic to port 80; ignore any injected PORT value.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
