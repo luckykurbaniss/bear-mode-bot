@@ -886,20 +886,45 @@ async def main():
         CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
     )
 
-    print("BEAR MODE: starting Telegram bot...", flush=True)
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    print("BEAR MODE: Telegram polling started.", flush=True)
+    # HOKAS publishes this project as a web service and requires a listener on PORT
+    # (normally 80). Keep a lightweight health endpoint alive alongside Telegram polling.
+    http_app = web.Application()
+    http_app.router.add_get("/", health_api)
+    http_app.router.add_get("/health", health_api)
+    http_runner = web.AppRunner(http_app)
+    initialized = False
+    started = False
+    polling = False
 
-    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
-    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
+    print("BEAR MODE: starting HTTP health service...", flush=True)
     try:
+        await http_runner.setup()
+        http_site = web.TCPSite(http_runner, host="0.0.0.0", port=API_PORT)
+        await http_site.start()
+        log.info("HTTP health service listening on 0.0.0.0:%s", API_PORT)
+
+        print("BEAR MODE: starting Telegram bot...", flush=True)
+        await app.initialize()
+        initialized = True
+        await app.start()
+        started = True
+        await app.updater.start_polling()
+        polling = True
+        log.info("BEAR MODE bot is running; Telegram polling is active.")
+
+        # Orders continue to arrive through Telegram Web App sendData (WEB_APP_DATA).
         await asyncio.Event().wait()
+    except Exception:
+        log.exception("BEAR MODE startup or runtime failed")
+        raise
     finally:
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
+        if polling:
+            await app.updater.stop()
+        if started:
+            await app.stop()
+        if initialized:
+            await app.shutdown()
+        await http_runner.cleanup()
 
 
 if __name__ == "__main__":
