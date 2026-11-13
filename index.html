@@ -85,20 +85,15 @@ $('orderForm').onsubmit=async e=>{
  const order={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim()};
  submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';
  try{
-  // Orders from the Telegram bottom Menu Button must use the authenticated HOKAS API.
-  if(!tg||!tg.initData){
-   throw new Error('Открой магазин через кнопку «Магазин» в Telegram.');
+  // sendData works when this Mini App is launched from the Telegram reply-keyboard Web App button.
+  if(!tg||!tg.initData||typeof tg.sendData!=='function'){
+   throw new Error('Открой магазин кнопкой «Открыть магазин» внизу чата Telegram.');
   }
-  const response=await fetch('https://bear-mode-bot-d2e84d.subhub.tr/api/order',{
-   method:'POST',
-   headers:{'Content-Type':'application/json','X-Telegram-Init-Data':tg.initData},
-   body:JSON.stringify(order)
-  });
-  const result=await response.json().catch(()=>({}));
-  if(!response.ok||!result.ok)throw new Error(result.error||'Сервер не принял заказ.');
+  tg.sendData(JSON.stringify(order));
   submitButton.textContent='Заказ отправлен! 🐼';
-  toast('Заказ №'+result.order_id+' принят ботом. Проверь сообщения от BEAR MODE.');
-  setTimeout(()=>tg.close(),1200); }catch(err){
+  toast('Заказ передан боту. Дождись подтверждения в Telegram.');
+  setTimeout(()=>tg.close(),900);
+ }catch(err){
   console.error('Order submission failed:',err);
   submitButton.disabled=false;submitButton.textContent='🐼 Отправить заказ';
   toast(err.message||'Не удалось отправить заказ. Напишите @lucky_ranger');
