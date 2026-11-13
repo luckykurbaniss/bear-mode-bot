@@ -286,8 +286,6 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await remove_catalog_prompt(context)
-    await remove_shop_hint(context)
     context.user_data.clear()
     welcome = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
@@ -313,6 +311,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
+
+    # Clean up old temporary messages only after the /start response is delivered.
+    try:
+        await remove_catalog_prompt(context)
+        await remove_shop_hint(context)
+    except Exception:
+        log.exception("Could not clean up old menu messages; /start response was sent")
 
     # Menu-button settings are optional: a Telegram API failure must not block /start.
     try:
