@@ -362,15 +362,16 @@ async def show_catalog_prompt(chat_id, context):
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    # Acknowledge immediately so Telegram stops showing the loading spinner.
     await q.answer()
     data = q.data
-    await remove_catalog_prompt(context)
-    if data != "home":
-        await remove_shop_hint(context)
+
     if data == "home":
+        await remove_catalog_prompt(context)
+        await remove_shop_hint(context)
         context.user_data.clear()
         await q.edit_message_text(
-            "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
+            "🐻 *BEAR MODE*\\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
         # Restore (replace, never append) the single shop reply-keyboard button.
@@ -381,7 +382,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             is_persistent=True,
             input_field_placeholder="Откройте магазин BEAR MODE"
         )
-        await remove_shop_hint(context)
         hint = await context.bot.send_message(
             chat_id=q.message.chat_id,
             text="🛒 Магазин всегда доступен на кнопке внизу.",
@@ -389,30 +389,42 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         context.chat_data["shop_hint_message_id"] = hint.message_id
         context.chat_data["shop_hint_chat_id"] = hint.chat_id
+
     elif data in ("catalog", "delivery", "contact"):
-        # Hide the persistent shop keyboard without showing a visible menu notice.
-        await context.bot.send_message(
-            chat_id=q.message.chat_id,
-            text="\u2060",
-            reply_markup=ReplyKeyboardRemove()
+        # Show the requested section first; housekeeping runs in the background.
+        context.application.create_task(remove_catalog_prompt(context))
+        context.application.create_task(remove_shop_hint(context))
+        context.application.create_task(
+            context.bot.send_message(
+                chat_id=q.message.chat_id,
+                text="\\u2060",
+                reply_markup=ReplyKeyboardRemove()
+            )
         )
+
         if data == "catalog":
-            await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
+            await q.edit_message_text(
+                "🍱 *Выбери свой сет:*",
+                parse_mode="Markdown",
+                reply_markup=catalog_keyboard()
+            )
         elif data == "delivery":
             await q.edit_message_text(
-            "🚚 *Доставка BEAR MODE*\n\n"
-            "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\n"
-            "Нажми «Выбрать сет», чтобы оформить заказ.",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
-                [InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]
-            ])
+                "🚚 *Доставка BEAR MODE*\\n\\n"
+                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\\n"
+                "Нажми «Выбрать сет», чтобы оформить заказ.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
+                    [InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]
+                ])
             )
         else:
             await q.edit_message_text(
                 "☎️ Чтобы задать вопрос по заказу, напиши владельцу канала: @lucky_ranger",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("⬅️ В главное меню", callback_data="home")
+                ]])
             )
     return ConversationHandler.END
 
