@@ -317,15 +317,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=shop_keyboard
     )
     await update.message.reply_text(
-        "🐼 Выбирай, что будем делать:",
+        "🐼 Выбирай, что будем делать:\n\n"
+        "🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    hint = await update.message.reply_text(
-        "🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
-    )
-    context.chat_data["shop_hint_message_id"] = hint.message_id
-    context.chat_data["shop_hint_chat_id"] = hint.chat_id
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -406,10 +402,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await remove_catalog_prompt(context)
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:",
+            "🐼 Выбирай, что будем делать:\n\n"
+            "🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await set_shop_hint_visibility(context, True, q.message.chat_id)
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
@@ -440,11 +436,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
 
-        # Hide the temporary hint only after the requested menu has appeared.
-        # This avoids delaying the catalog while Telegram deletes the old message.
-        context.application.create_task(
-            set_shop_hint_visibility(context, False, q.message.chat_id)
-        )
     return ConversationHandler.END
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
