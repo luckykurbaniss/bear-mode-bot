@@ -886,20 +886,30 @@ async def main():
         CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
     )
 
+    print("BEAR MODE: starting health server...", flush=True)
+    health_app = web.Application()
+    health_app.router.add_get("/", health_api)
+    health_app.router.add_get("/health", health_api)
+    runner = web.AppRunner(health_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", API_PORT)
+    await site.start()
+    print(f"BEAR MODE: health server listening on 0.0.0.0:{API_PORT}.", flush=True)
+
     print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
     print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
-    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
+    print("BEAR MODE: startup complete; Telegram bot is waiting for messages.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
+        await runner.cleanup()
 
 
 if __name__ == "__main__":
