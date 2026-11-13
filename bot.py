@@ -281,7 +281,6 @@ def main_keyboard():
         [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
         [InlineKeyboardButton("📦 Как работает доставка", callback_data="delivery")],
         [InlineKeyboardButton("☎️ Связаться", callback_data="contact")],
-        [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_webapp_url()))],
     ])
 
 def catalog_keyboard():
@@ -300,17 +299,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Keep the shop launcher as an inline button in the main menu.
-    # Unlike a reply-keyboard button, it remains visible after the Mini App is closed.
+    # Keep the persistent shop button in its original bottom-of-chat position.
     await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonDefault()
     )
+    shop_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_webapp_url()))]],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=shop_keyboard
     )
     await update.message.reply_text(
         "🐼 Выбирай, что будем делать:",
