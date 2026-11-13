@@ -272,11 +272,16 @@ def order_status_keyboard(customer_chat_id):
 # Conversation states
 SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
+def shop_webapp_url():
+    return WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-5"
+
+
 def main_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
         [InlineKeyboardButton("📦 Как работает доставка", callback_data="delivery")],
         [InlineKeyboardButton("☎️ Связаться", callback_data="contact")],
+        [InlineKeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_webapp_url()))],
     ])
 
 def catalog_keyboard():
@@ -295,26 +300,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
-    # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
-    # Reset both the bot-wide and this chat's custom menu button.
+    # Keep the shop launcher as an inline button in the main menu.
+    # Unlike a reply-keyboard button, it remains visible after the Mini App is closed.
     await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonDefault()
     )
-    # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
-    shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-    # Attach the persistent shop keyboard to the existing welcome message.
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
-        reply_markup=shop_keyboard
+        reply_markup=ReplyKeyboardRemove()
     )
     await update.message.reply_text(
         "🐼 Выбирай, что будем делать:",
