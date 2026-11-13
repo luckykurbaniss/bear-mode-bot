@@ -63,27 +63,96 @@ const dishes=[
 ];
 const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
 const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/[\u00a0\u202f]/g,'.')+' ₫';
+const cartStorageKey='bearModeCart:'+String(tg?.initDataUnsafe?.user?.id||'guest');
 function render(){
- $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
- $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
+ $('products').innerHTML=sets.map((s,i)=>\`<article class="card"><div class="card-photo"><img src="\${s.photo}" alt="\${s.name}" loading="\${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>\${s.tag}</h3><div class="desc">\${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">\${money(PRICE)}</div><button class="btn" onclick="add('set_\${s.id}')">＋ Добавить в корзину</button></div></article>\`).join('');
+ $('ingredients').innerHTML=dishes.map(d=>\`<div class="ingredient"><img src="\${d.photo}" alt="\${d.name}" loading="lazy" decoding="async"><span>\${d.name}<br><b style="color:var(--gold)">\${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('\${d.id}')">＋ Добавить</button></span></div>\`).join('');
 }
-function add(id){cart[id]=(cart[id]||0)+1;update();toast('Добавлено в корзину 🐼')}
-function change(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update()}
+function parseCartSnapshot(raw){
+ if(!raw)return null;
+ try{
+  const data=JSON.parse(raw);
+  const source=data&&data.items&&typeof data.items==='object'?data.items:data;
+  const items={};
+  for(const [id,qty] of Object.entries(source||{})){
+   if(catalog.some(x=>x.id===id)&&Number.isInteger(qty)&&qty>0&&qty<=100)items[id]=qty;
+  }
+  return {items,updatedAt:Number(data?.updatedAt)||0};
+ }catch(e){console.warn('Could not read saved cart',e);return null}
+}
+function storageGet(storage){
+ return new Promise(resolve=>{
+  let finished=false;
+  const finish=value=>{if(finished)return;finished=true;clearTimeout(timer);resolve(value)};
+  const timer=setTimeout(()=>finish(null),1800);
+  try{
+   if(!storage||typeof storage.getItem!=='function')return finish(null);
+   storage.getItem(cartStorageKey,(err,value)=>finish(err?null:value||null));
+  }catch(e){finish(null)}
+ });
+}
+function storageSet(storage,value){
+ return new Promise(resolve=>{
+  let finished=false;
+  const finish=ok=>{if(finished)return;finished=true;clearTimeout(timer);resolve(ok)};
+  const timer=setTimeout(()=>finish(false),1800);
+  try{
+   if(!storage||typeof storage.setItem!=='function')return finish(false);
+   storage.setItem(cartStorageKey,value,err=>finish(!err));
+  }catch(e){finish(false)}
+ });
+}
+async function loadCart(){
+ let localValue=null;
+ try{localValue=localStorage.getItem(cartStorageKey)}catch(e){}
+ const remoteValues=await Promise.all([storageGet(tg?.CloudStorage),storageGet(tg?.DeviceStorage)]);
+ const snapshots=[localValue,...remoteValues].map(parseCartSnapshot).filter(Boolean);
+ snapshots.sort((a,b)=>b.updatedAt-a.updatedAt);
+ if(snapshots.length)Object.assign(cart,snapshots[0].items);
+ update();
+}
+const cartReady=loadCart();
+let cartSaveQueue=Promise.resolve();
+function saveCart(){
+ const snapshot=JSON.stringify({version:1,updatedAt:Date.now(),items:{...cart}});
+ try{localStorage.setItem(cartStorageKey,snapshot)}catch(e){console.warn('Local cart storage unavailable',e)}
+ cartSaveQueue=cartSaveQueue.catch(()=>{}).then(async()=>{
+  await Promise.all([storageSet(tg?.CloudStorage,snapshot),storageSet(tg?.DeviceStorage,snapshot)]);
+ });
+ return cartSaveQueue;
+}
+async function add(id){
+ await cartReady;
+ cart[id]=(cart[id]||0)+1;
+ update();
+ await saveCart();
+ toast('Добавлено в корзину 🐼');
+}
+async function change(id,d){
+ await cartReady;
+ cart[id]=(cart[id]||0)+d;
+ if(cart[id]<=0)delete cart[id];
+ update();
+ await saveCart();
+}
 function update(){
  const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0);
- $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);
- $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>';
+ $('count').textContent=n;$('summary').textContent=n?\`\${n} поз. · \${money(sum)}\`:'Пока ничего не выбрано';$('total').textContent=money(sum);
+ $('cartItems').innerHTML=n?entries.map(x=>\`<div class="row"><div><b>\${x.name}</b><br><span class="note">\${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('\${x.id}',-1)">−</button><b>\${cart[x.id]}</b><button type="button" onclick="change('\${x.id}',1)">＋</button></div></div>\`).join(''):'<div class="note">Корзина пока пуста.</div>';
 }
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveCart()});
+window.addEventListener('pagehide',()=>saveCart());
 const imageViewer=$('imageViewer'),imageViewerImg=$('imageViewerImg');
 function openImage(img){imageViewerImg.src=img.currentSrc||img.src;imageViewerImg.alt=img.alt||'';imageViewer.classList.add('show')}
 function closeImage(){imageViewer.classList.remove('show');imageViewerImg.removeAttribute('src')}
 ['products','ingredients'].forEach(id=>$(id).addEventListener('click',e=>{const img=e.target.closest('img');if(img)openImage(img)}));
 $('imageViewerClose').onclick=closeImage;imageViewer.onclick=e=>{if(e.target===imageViewer)closeImage()};document.addEventListener('keydown',e=>{if(e.key==='Escape')closeImage()});
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
-$('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
+$('openCart').onclick=async()=>{await cartReady;if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
 let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('date').min=local;$('date').value=local;
 $('orderForm').onsubmit=async e=>{
  e.preventDefault();
+ await cartReady;
  if(!Object.keys(cart).length)return toast('Корзина пуста');
  const submitButton=$('orderForm').querySelector('button[type="submit"]');
  if(submitButton.disabled)return;
@@ -94,7 +163,9 @@ $('orderForm').onsubmit=async e=>{
   if(!tg||typeof tg.sendData!=='function'){
    throw new Error('Telegram не передал функцию отправки. Закрой магазин и открой его кнопкой «Открыть магазин» в чате с ботом.');
   }
-  // sendData does not require initData; Telegram delivers this payload as web_app_data to the bot.
+  // Save the current cart before Telegram closes the Mini App after sendData.
+  await saveCart();
+  // Telegram delivers this payload to the bot as web_app_data.
   tg.sendData(JSON.stringify(order));
   submitButton.textContent='Заказ отправлен! 🐼';
   toast('Заказ передан боту. Дождись подтверждения в Telegram.');
