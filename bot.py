@@ -318,7 +318,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=shop_keyboard
     )
     await update.message.reply_text(
-        "🐻 *BEAR MODE*\\nВыбирай, что будем делать:",
+        "🐻 *BEAR MODE*\nВыбирай, что будем делать:",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
