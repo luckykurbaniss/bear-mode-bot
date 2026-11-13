@@ -12,7 +12,8 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, ReplyKeyboardRemove, MenuButtonWebApp
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
+    KeyboardButton, ReplyKeyboardMarkup, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -273,7 +274,7 @@ def order_status_keyboard(customer_chat_id):
 SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
 def shop_webapp_url():
-    return WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-5"
+    return WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-6"
 
 
 def main_keyboard():
@@ -299,27 +300,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Keep the Web App button in Telegram's bottom menu beside the message field.
-    shop_menu_button = MenuButtonWebApp(
-        text="🛒 Открыть магазин",
-        web_app=WebAppInfo(url=shop_webapp_url())
-    )
-    await context.bot.set_chat_menu_button(menu_button=shop_menu_button)
+    # Keep a persistent, clearly labeled shop button on the Telegram reply keyboard.
+    await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
-        menu_button=shop_menu_button
+        menu_button=MenuButtonDefault()
+    )
+    shop_keyboard = ReplyKeyboardMarkup(
+        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_webapp_url()))]],
+        resize_keyboard=True,
+        is_persistent=True
     )
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=shop_keyboard
     )
     await update.message.reply_text(
         "🐼 Выбирай, что будем делать:",
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    await set_shop_hint_visibility(context, True, update.effective_chat.id)
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -403,7 +404,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await set_shop_hint_visibility(context, True, q.message.chat_id)
+
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
@@ -434,7 +435,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
 
-        await set_shop_hint_visibility(context, False, q.message.chat_id)
+
 
     return ConversationHandler.END
 
