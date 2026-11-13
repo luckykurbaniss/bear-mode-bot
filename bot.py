@@ -316,10 +316,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    # Recreate the shop reminder on every /start so stale saved message IDs
-    # cannot prevent it from appearing in the welcome flow.
-    await remove_shop_hint(context)
-    await set_shop_hint_visibility(context, True, update.effective_chat.id)
+    # Send the shop reminder immediately after the main menu. Delete the previous
+    # reminder only afterwards, so a slow delete request cannot delay the new one.
+    old_hint_id = context.chat_data.pop("shop_hint_message_id", None)
+    old_hint_chat_id = context.chat_data.pop("shop_hint_chat_id", None)
+    hint = await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="🐾 Магазин всегда под лапкой!\\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+    )
+    context.chat_data["shop_hint_message_id"] = hint.message_id
+    context.chat_data["shop_hint_chat_id"] = hint.chat_id
+    if old_hint_id and old_hint_chat_id:
+        try:
+            await context.bot.delete_message(chat_id=old_hint_chat_id, message_id=old_hint_id)
+        except Exception:
+            log.debug("Previous shop hint already removed or cannot be deleted")
 
     # Clean up old temporary messages only after the /start response is delivered.
     try:
