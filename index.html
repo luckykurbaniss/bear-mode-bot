@@ -79,8 +79,8 @@ function update(){
 function storageGetCart(){
  return new Promise(resolve=>{
   try{
-   if(tg?.CloudStorage?.getItem){tg.CloudStorage.getItem('bearModeCart',(err,value)=>resolve(err?null:value||null));return}
-   if(tg?.DeviceStorage?.getItem){tg.DeviceStorage.getItem('bearModeCart',(err,value)=>resolve(err?null:value||null));return}
+   if(tg?.CloudStorage?.getItem){tg.CloudStorage.getItem('bearModeCart',(err,value)=>{if(!err&&value){resolve(value);return}try{resolve(localStorage.getItem('bearModeCart'))}catch(e){resolve(null)}});return}
+   if(tg?.DeviceStorage?.getItem){tg.DeviceStorage.getItem('bearModeCart',(err,value)=>{if(!err&&value){resolve(value);return}try{resolve(localStorage.getItem('bearModeCart'))}catch(e){resolve(null)}});return}
    resolve(localStorage.getItem('bearModeCart'));
   }catch(e){resolve(localStorage.getItem('bearModeCart'))}
  })
