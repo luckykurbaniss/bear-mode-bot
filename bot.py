@@ -295,14 +295,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
-    # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
-    # Reset both the bot-wide and this chat's custom menu button.
-    await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
-    await context.bot.set_chat_menu_button(
-        chat_id=update.effective_chat.id,
-        menu_button=MenuButtonDefault()
-    )
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
     shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
     shop_keyboard = ReplyKeyboardMarkup(
@@ -321,6 +313,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
+
+    # Menu-button settings are optional: a Telegram API failure must not block /start.
+    try:
+        await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
+        await context.bot.set_chat_menu_button(
+            chat_id=update.effective_chat.id,
+            menu_button=MenuButtonDefault()
+        )
+    except Exception:
+        log.exception("Could not reset Telegram menu button; /start response was sent")
+
     await set_shop_hint_visibility(context, True, update.effective_chat.id)
     return ConversationHandler.END
 
