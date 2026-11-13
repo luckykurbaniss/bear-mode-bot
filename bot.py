@@ -416,11 +416,16 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "home":
         await remove_catalog_prompt(context)
         context.user_data.clear()
+        # Show the shop reminder in the same menu message instead of
+        # sending a second message afterward. The persistent shop button
+        # remains in the reply keyboard at the bottom of the chat.
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:",
+            "🐼 Выбирай, что будем делать:\n\n"
+            "🐾 Магазин всегда под лапкой!\n"
+            "Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await set_shop_hint_visibility(context, True, q.message.chat_id)
+        context.application.create_task(remove_shop_hint(context))
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
