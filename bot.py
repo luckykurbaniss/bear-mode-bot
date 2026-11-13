@@ -413,7 +413,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
         context.application.create_task(remove_catalog_prompt(context))
-        await set_shop_hint_visibility(context, False, q.message.chat_id)
 
         if data == "catalog":
             await q.edit_message_text(
@@ -439,6 +438,12 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     InlineKeyboardButton("⬅️ В главное меню", callback_data="home")
                 ]])
             )
+
+        # Hide the temporary hint only after the requested menu has appeared.
+        # This avoids delaying the catalog while Telegram deletes the old message.
+        context.application.create_task(
+            set_shop_hint_visibility(context, False, q.message.chat_id)
+        )
     return ConversationHandler.END
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
