@@ -435,11 +435,13 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        context.application.create_task(set_shop_hint_visibility(context, True, q.message.chat_id))
+        await set_shop_hint_visibility(context, True, q.message.chat_id)
 
     elif data in ("catalog", "delivery", "contact"):
-        # Show the requested section first; housekeeping runs in the background.
-        context.application.create_task(remove_catalog_prompt(context))
+        # Hide the shop reminder before changing sections to avoid a race
+        # with a quick return to the main menu.
+        await set_shop_hint_visibility(context, False, q.message.chat_id)
+        await remove_catalog_prompt(context)
 
         if data == "catalog":
             await q.edit_message_text(
