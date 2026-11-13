@@ -337,6 +337,39 @@ async def remove_catalog_prompt(context):
             log.debug("Catalog prompt already removed or cannot be deleted")
 
 
+async def set_shop_hint_visibility(context, visible, chat_id):
+    message_id = context.chat_data.get("shop_hint_message_id")
+    saved_chat_id = context.chat_data.get("shop_hint_chat_id")
+    if message_id and saved_chat_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=saved_chat_id,
+                message_id=message_id,
+                text=(
+                    "🛒 Магазин всегда доступен на кнопке внизу."
+                    if visible else "\\u2060"
+                )
+            )
+            return
+        except Exception:
+            log.debug("Could not edit existing shop hint; will check keyboard state")
+    if visible:
+        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
+        shop_keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
+            resize_keyboard=True,
+            is_persistent=True,
+            input_field_placeholder="Откройте магазин BEAR MODE"
+        )
+        hint = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🛒 Магазин всегда доступен на кнопке внизу.",
+            reply_markup=shop_keyboard
+        )
+        context.chat_data["shop_hint_message_id"] = hint.message_id
+        context.chat_data["shop_hint_chat_id"] = hint.chat_id
+
+
 async def remove_shop_hint(context):
     message_id = context.chat_data.pop("shop_hint_message_id", None)
     chat_id = context.chat_data.pop("shop_hint_chat_id", None)
@@ -367,32 +400,19 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "home":
         await remove_catalog_prompt(context)
-        await remove_shop_hint(context)
         context.user_data.clear()
         await q.edit_message_text(
             "🐻 *BEAR MODE*\\nВыбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        # Restore (replace, never append) the single shop reply-keyboard button.
-        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
-        shop_keyboard = ReplyKeyboardMarkup(
-            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-            resize_keyboard=True,
-            is_persistent=True,
-            input_field_placeholder="Откройте магазин BEAR MODE"
-        )
-        hint = await context.bot.send_message(
-            chat_id=q.message.chat_id,
-            text="🛒 Магазин всегда доступен на кнопке внизу.",
-            reply_markup=shop_keyboard
-        )
-        context.chat_data["shop_hint_message_id"] = hint.message_id
-        context.chat_data["shop_hint_chat_id"] = hint.chat_id
+        await set_shop_hint_visibility(context, True, q.message.chat_id)
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
         context.application.create_task(remove_catalog_prompt(context))
-        context.application.create_task(remove_shop_hint(context))
+        context.application.create_task(
+            set_shop_hint_visibility(context, False, q.message.chat_id)
+        )
 
         if data == "catalog":
             await q.edit_message_text(
