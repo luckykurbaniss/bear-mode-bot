@@ -340,6 +340,7 @@ async def remove_catalog_prompt(context):
 async def set_shop_hint_visibility(context, visible, chat_id):
     message_id = context.chat_data.get("shop_hint_message_id")
     saved_chat_id = context.chat_data.get("shop_hint_chat_id")
+
     if message_id and saved_chat_id:
         try:
             await context.bot.edit_message_text(
@@ -347,12 +348,17 @@ async def set_shop_hint_visibility(context, visible, chat_id):
                 message_id=message_id,
                 text=(
                     "🛒 Магазин всегда доступен на кнопке внизу."
-                    if visible else "\\u2060"
+                    if visible else "\u2060"
                 )
             )
-            return
-        except Exception:
-            log.debug("Could not edit existing shop hint; will check keyboard state")
+        except Exception as exc:
+            # Telegram returns this when the text already has the requested value.
+            # Treat it as success; never create a second hint message.
+            if "message is not modified" in str(exc).lower():
+                return
+            log.warning("Could not update existing shop hint: %s", exc)
+        return
+
     if visible:
         shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-4"
         shop_keyboard = ReplyKeyboardMarkup(
@@ -410,9 +416,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
         context.application.create_task(remove_catalog_prompt(context))
-        context.application.create_task(
-            set_shop_hint_visibility(context, False, q.message.chat_id)
-        )
+        await set_shop_hint_visibility(context, False, q.message.chat_id)
 
         if data == "catalog":
             await q.edit_message_text(
