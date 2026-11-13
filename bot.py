@@ -3,11 +3,16 @@ import os
 import logging
 import json
 import sqlite3
+import hashlib
+import hmac
+import time
+from urllib.parse import parse_qsl
+from aiohttp import web
+
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
-    KeyboardButton, ReplyKeyboardMarkup
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, MenuButtonWebApp
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -23,6 +28,8 @@ log = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
+API_PORT = int(os.getenv("PORT", "8080"))
+ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
@@ -286,15 +293,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🌐 Открыть меню и заказать", web_app=WebAppInfo(url=WEB_APP_URL))]],
-        resize_keyboard=True,
-        is_persistent=True
+    await context.bot.set_chat_menu_button(
+        chat_id=update.effective_chat.id,
+        menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
     )
-    await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=keyboard)
-    await update.message.reply_text(
-        "Нажми кнопку «🌐 Открыть меню и заказать» внизу чата."
-    )
+    await update.message.reply_text(welcome, parse_mode="Markdown")
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -607,6 +610,121 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         )
 
 
+
+def validate_telegram_init_data(init_data: str):
+    """Validate Telegram Mini App initData and return its authenticated user."""
+    if not init_data or len(init_data) > 10000:
+        raise ValueError("Missing Telegram initData")
+    parsed = dict(parse_qsl(init_data, keep_blank_values=True))
+    received_hash = parsed.pop("hash", "")
+    if not received_hash:
+        raise ValueError("Missing initData hash")
+    check_string = "\\n".join(f"{key}={value}" for key, value in sorted(parsed.items()))
+    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(calculated_hash, received_hash):
+        raise ValueError("Invalid Telegram initData signature")
+    auth_date = int(parsed.get("auth_date", "0"))
+    if auth_date <= 0 or time.time() - auth_date > 86400 or auth_date - time.time() > 60:
+        raise ValueError("Expired Telegram initData")
+    user = json.loads(parsed.get("user", "{}"))
+    if not user.get("id"):
+        raise ValueError("Telegram user is missing")
+    return user
+
+
+async def order_api(request):
+    if request.method == "OPTIONS":
+        return web.Response(status=204, headers={
+            "Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Init-Data",
+            "Vary": "Origin",
+        })
+    headers = {
+        "Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
+        "Vary": "Origin",
+        "Content-Type": "application/json",
+    }
+    if request.headers.get("Origin") != ALLOWED_WEB_ORIGIN:
+        return web.json_response({"ok": False, "error": "Origin not allowed"}, status=403, headers=headers)
+    try:
+        user = validate_telegram_init_data(request.headers.get("X-Telegram-Init-Data", ""))
+        order = await request.json()
+        if order.get("type") != "bear_mode_order":
+            raise ValueError("Unknown order type")
+        customer_name = str(order.get("customer_name", "")).strip()
+        phone = str(order.get("phone", "")).strip()
+        address = str(order.get("address", "")).strip()
+        delivery_date = str(order.get("delivery_date", "")).strip()
+        comment = str(order.get("comment", "")).strip()
+        items = order.get("items", [])
+        if not all([customer_name, phone, address, delivery_date]):
+            raise ValueError("Заполните имя, телефон, адрес и дату доставки.")
+        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
+            raise ValueError("Слишком длинные данные.")
+        requested_date = date.fromisoformat(delivery_date)
+        if requested_date < datetime.now(VN_TZ).date():
+            raise ValueError("Дата доставки не может быть в прошлом.")
+        catalog_prices = {
+            "set_1": ("Сет Энергия", PRICE), "set_2": ("Сет Атлантика", PRICE),
+            "set_3": ("Сет Комфорт", PRICE), "set_4": ("Сет Характер", PRICE),
+            "buckwheat": ("Гречка с грибами", 30000), "rice": ("Рис с овощами", 30000),
+            "potato": ("Картофельное пюре", 30000), "chicken_breast": ("Куриная грудка", 60000),
+            "salmon": ("Лосось", 80000), "cutlets": ("Домашние котлеты (2 шт.)", 65000),
+            "chicken_thigh": ("Куриное бедро", 60000), "vegetable_salad": ("Овощной салат", 35000),
+            "freshness_salad": ("Салат «Свежесть»", 35000), "vitamin_salad": ("Витаминный салат", 35000),
+            "omelet": ("Омлет", 20000), "egg": ("Яйцо отварное", 15000),
+            "banana": ("Мини-банан", 10000), "mors": ("Морс", 20000), "baguette": ("Багет", 15000),
+        }
+        if not isinstance(items, list) or not 1 <= len(items) <= len(catalog_prices):
+            raise ValueError("Корзина пуста или содержит слишком много позиций.")
+        lines, saved_items, total, seen = [], [], 0, set()
+        for entry in items:
+            item_id = str(entry.get("id", ""))
+            quantity = int(entry.get("quantity", 0))
+            if item_id not in catalog_prices or item_id in seen or not 1 <= quantity <= 100:
+                raise ValueError("Некорректная позиция заказа.")
+            seen.add(item_id)
+            name, price = catalog_prices[item_id]
+            amount = quantity * price
+            total += amount
+            lines.append(f"• {name} × {quantity} — {amount:,} ₫".replace(",", "."))
+            saved_items.append(f"{name} × {quantity}")
+        order_id = save_order(
+            int(user["id"]), customer_name, phone, address, delivery_date,
+            "", comment, ", ".join(saved_items), total
+        )
+        admin_text = (
+            f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\\n\\n" + "\\n".join(lines)
+            + f"\\n\\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
+            + f"\\n\\n👤 Имя: {customer_name}\\n📱 Телефон: {phone}"
+            + f"\\n📍 Адрес: {address}\\n📅 Дата доставки: {delivery_date}"
+            + f"\\n💬 Комментарий: {comment or 'Нет'}"
+            + f"\\n\\nTelegram клиента: {('@' + user['username']) if user.get('username') else user['id']}"
+        )
+        try:
+            await request.app["bot"].send_message(
+                chat_id=int(ADMIN_CHAT_ID), text=admin_text,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
+                ]])
+            )
+            await request.app["bot"].send_message(
+                chat_id=int(user["id"]),
+                text=f"🎉 Заказ №{order_id} принят! Спасибо. Скоро свяжемся для подтверждения доставки."
+            )
+        except Exception:
+            delete_order(order_id)
+            raise
+        return web.json_response({"ok": True, "order_id": order_id}, headers=headers)
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400, headers=headers)
+    except Exception:
+        log.exception("Mini App order API failed")
+        return web.json_response({"ok": False, "error": "Не удалось отправить заказ. Напишите @lucky_ranger."}, status=500, headers=headers)
+
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Оформление остановлено. Чтобы начать заново, нажмите /start.")
@@ -680,11 +798,26 @@ async def main():
     await app.start()
     await app.updater.start_polling()
 
-    print("BEAR MODE bot is running!")
+    # Configure the single persistent Telegram chat-menu button.
+    await app.bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(text="Магазин", web_app=WebAppInfo(url=WEB_APP_URL))
+    )
+
+    api = web.Application(client_max_size=64 * 1024)
+    api["bot"] = app.bot
+    api.router.add_route("OPTIONS", "/api/order", order_api)
+    api.router.add_post("/api/order", order_api)
+    runner = web.AppRunner(api)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", API_PORT)
+    await site.start()
+
+    print(f"BEAR MODE bot and Mini App order API are running on port {API_PORT}!")
 
     try:
         await asyncio.Event().wait()
     finally:
+        await runner.cleanup()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
