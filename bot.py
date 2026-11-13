@@ -633,6 +633,10 @@ def validate_telegram_init_data(init_data: str):
     return user
 
 
+async def health_api(request):
+    return web.json_response({"ok": True, "service": "BEAR MODE order API", "port": API_PORT})
+
+
 async def order_api(request):
     if request.method == "OPTIONS":
         return web.Response(status=204, headers={
@@ -813,6 +817,7 @@ async def main():
     try:
         api = web.Application(client_max_size=64 * 1024)
         api["bot"] = app.bot
+        api.router.add_get("/health", health_api)
         api.router.add_route("OPTIONS", "/api/order", order_api)
         api.router.add_post("/api/order", order_api)
         runner = web.AppRunner(api)
@@ -820,6 +825,7 @@ async def main():
         site = web.TCPSite(runner, "0.0.0.0", API_PORT)
         await site.start()
         print(f"BEAR MODE: order API listening on 0.0.0.0:{API_PORT}.", flush=True)
+        print(f"BEAR MODE: health check at /health; allowed origin: {ALLOWED_WEB_ORIGIN}", flush=True)
     except Exception:
         log.exception("ORDER API FAILED TO START on port %s; Telegram bot will keep running", API_PORT)
         if runner:
