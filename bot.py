@@ -12,7 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonWebApp
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButton
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -295,18 +295,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Keep a permanent Mini App entry in Telegram's chat menu as well as the reply keyboard.
-    # This button remains available even when Telegram hides the reply keyboard after closing the shop.
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
     shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-    shop_menu_button = MenuButtonWebApp(
-        text="🛒 Открыть магазин",
-        web_app=WebAppInfo(url=shop_url)
-    )
-    await context.bot.set_chat_menu_button(menu_button=shop_menu_button)
+    # Remove the blue chat-menu button; keep the shop available on the reply keyboard.
+    await context.bot.set_chat_menu_button(menu_button=MenuButton())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
-        menu_button=shop_menu_button
+        menu_button=MenuButton()
     )
     shop_keyboard = ReplyKeyboardMarkup(
         [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
