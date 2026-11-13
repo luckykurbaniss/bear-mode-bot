@@ -12,8 +12,7 @@ from aiohttp import web
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
-    KeyboardButton, ReplyKeyboardMarkup, MenuButtonDefault
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -273,10 +272,6 @@ def order_status_keyboard(customer_chat_id):
 # Conversation states
 SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
-def shop_webapp_url():
-    return WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-6"
-
-
 def main_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
@@ -300,17 +295,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай готовый сет или собери свой заказ!\n\n"
         "🔥 Готовые сеты — 170.000 ₫"
     )
-    # Keep a persistent, clearly labeled shop button on the Telegram reply keyboard.
+    # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
+    # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
+    # Reset both the bot-wide and this chat's custom menu button.
     await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     await context.bot.set_chat_menu_button(
         chat_id=update.effective_chat.id,
         menu_button=MenuButtonDefault()
     )
+    # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
     shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_webapp_url()))]],
+        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
         resize_keyboard=True,
-        is_persistent=True
+        is_persistent=True,
     )
+    # Attach the persistent shop keyboard to the existing welcome message.
     await update.message.reply_text(
         welcome,
         parse_mode="Markdown",
@@ -406,7 +406,6 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
         await set_shop_hint_visibility(context, True, q.message.chat_id)
-
 
     elif data in ("catalog", "delivery", "contact"):
         # Show the requested section first; housekeeping runs in the background.
