@@ -7,7 +7,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo,
-    MenuButtonWebApp
+    MenuButtonWebApp, ReplyKeyboardRemove
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -279,8 +279,6 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Keep the single existing catalog prompt and reuse it on repeated /start.
-    # It is removed only while the customer is inside a menu section.
     context.user_data.clear()
     text = (
         "🐻 *BEAR MODE — еда с характером!*\n\n"
@@ -288,9 +286,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Выбирай свой вариант, оформляй заказ — приготовим и доставим!\n\n"
         "🔥 4 сета на выбор • 170.000 ₫ за сет"
     )
+    # Remove the old persistent reply-keyboard button from existing chats.
+    await update.message.reply_text(text, parse_mode="Markdown",
+                                    reply_markup=ReplyKeyboardRemove())
     await update.message.reply_text(
-        text,
-        parse_mode="Markdown",
+        "Выбирай, что будем делать:",
         reply_markup=main_keyboard()
     )
     return ConversationHandler.END
@@ -354,7 +354,6 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
-    await remove_catalog_prompt(context)
     context.user_data.clear()
     context.user_data["set_id"] = set_id
     await q.edit_message_text(
