@@ -297,7 +297,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     # Reply-keyboard Web App launch supports Telegram.WebApp.sendData().
     # Remove the old persistent blue bottom menu button; keep the reply keyboard shop button.
-    # Telegram menu-button maintenance must never block the welcome response.
+    # Reset both the bot-wide and this chat's custom menu button.
+    await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
+    await context.bot.set_chat_menu_button(
+        chat_id=update.effective_chat.id,
+        menu_button=MenuButtonDefault()
+    )
     # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
     shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
     shop_keyboard = ReplyKeyboardMarkup(
@@ -316,16 +321,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=main_keyboard()
     )
-    # These Telegram settings are cosmetic. If Telegram rejects them, the user
-    # has already received the welcome and main menu above.
-    try:
-        await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
-        await context.bot.set_chat_menu_button(
-            chat_id=update.effective_chat.id,
-            menu_button=MenuButtonDefault()
-        )
-    except Exception:
-        log.exception("Could not reset Telegram menu button")
     await set_shop_hint_visibility(context, True, update.effective_chat.id)
     return ConversationHandler.END
 
@@ -891,37 +886,18 @@ async def main():
         CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
     )
 
-    print("BEAR MODE: initializing Telegram...", flush=True)
+    print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
     await app.start()
+    await app.updater.start_polling()
+    print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # HOKAS expects a web service to listen on its assigned PORT (normally 80).
-    # The same service also exposes the Mini App order API.
-    api_app = web.Application()
-    api_app["bot"] = app.bot
-    api_app.router.add_get("/", health_api)
-    api_app.router.add_get("/health", health_api)
-    api_app.router.add_post("/api/order", order_api)
-    api_app.router.add_route("OPTIONS", "/api/order", order_api)
-    runner = web.AppRunner(api_app, access_log=log)
-
+    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
+    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
     try:
-        await runner.setup()
-        site = web.TCPSite(runner, host="0.0.0.0", port=API_PORT)
-        await site.start()
-        print(f"BEAR MODE: HTTP service listening on 0.0.0.0:{API_PORT}.", flush=True)
-
-        await app.updater.start_polling()
-        print("BEAR MODE: Telegram polling started.", flush=True)
-        print("BEAR MODE: startup complete.", flush=True)
         await asyncio.Event().wait()
-    except Exception:
-        log.exception("BEAR MODE startup or runtime failure")
-        raise
     finally:
-        if app.updater.running:
-            await app.updater.stop()
-        await runner.cleanup()
+        await app.updater.stop()
         await app.stop()
         await app.shutdown()
 
