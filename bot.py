@@ -309,7 +309,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="Откройте магазин BEAR MODE"
     )
     # Attach the persistent shop keyboard to the existing welcome message.
     await update.message.reply_text(
