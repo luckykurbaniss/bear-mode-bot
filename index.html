@@ -63,70 +63,17 @@ const dishes=[
 ];
 const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
 const cart={},$=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/[\u00a0\u202f]/g,'.')+' ₫';
-try{Object.assign(cart,JSON.parse(localStorage.getItem('bearModeCart')||'{}')||{})}catch(e){}
 function render(){
  $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
  $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
 }
-async function add(id){await cartReady;cart[id]=(cart[id]||0)+1;update();await saveCloudCart();toast('Добавлено в корзину 🐼')}
-async function change(id,d){await cartReady;cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update();await saveCloudCart()}
+function add(id){cart[id]=(cart[id]||0)+1;update();toast('Добавлено в корзину 🐼')}
+function change(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update()}
 function update(){
- try{localStorage.setItem('bearModeCart',JSON.stringify(cart))}catch(e){}
  const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0);
  $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);
  $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>';
 }
-function storageGetCart(){
- return new Promise(resolve=>{
-  // The local copy is written synchronously on every cart change. Prefer it
-  // over Telegram storage so an older cloud snapshot cannot replace newer items.
-  try{
-   const local=localStorage.getItem('bearModeCart');
-   if(local!==null){resolve(local);return}
-  }catch(e){}
-  const readTelegram=(api)=>{
-   if(!api?.getItem)return false;
-   try{
-    api.getItem('bearModeCart',(err,value)=>{
-     if(!err&&value){
-      try{localStorage.setItem('bearModeCart',value)}catch(e){}
-      resolve(value);
-     }else resolve('{}');
-    });
-    return true;
-   }catch(e){return false}
-  };
-  if(readTelegram(tg?.CloudStorage))return;
-  if(readTelegram(tg?.DeviceStorage))return;
-  resolve('{}');
- })
-}
-let cartSaveQueue=Promise.resolve();
-function saveCloudCart(){
- const value=JSON.stringify(cart);
- // Save locally immediately: this survives closing and reopening the Mini App.
- try{localStorage.setItem('bearModeCart',value)}catch(e){console.warn('Local cart save failed',e)}
- cartSaveQueue=cartSaveQueue.then(async()=>{
-  const write=(api,label)=>new Promise(resolve=>{
-   if(!api?.setItem){resolve(false);return}
-   try{
-    api.setItem('bearModeCart',value,err=>{
-     if(err)console.warn(label+' cart save failed',err);
-     resolve(!err);
-    });
-   }catch(e){console.warn(label+' cart storage unavailable',e);resolve(false)}
-  });
-  // Keep both Telegram stores in sync when the client supports them.
-  await write(tg?.CloudStorage,'Telegram CloudStorage');
-  await write(tg?.DeviceStorage,'Telegram DeviceStorage');
- });
- return cartSaveQueue;
-}
-const cartReady=(async()=>{
- const saved=await storageGetCart();
- if(saved){try{const data=JSON.parse(saved);for(const [id,qty] of Object.entries(data)){if(catalog.some(x=>x.id===id)&&Number.isInteger(qty)&&qty>0)cart[id]=qty}}catch(e){console.warn('Invalid saved cart',e)}}
- update();
-})();
 const imageViewer=$('imageViewer'),imageViewerImg=$('imageViewerImg');
 function openImage(img){imageViewerImg.src=img.currentSrc||img.src;imageViewerImg.alt=img.alt||'';imageViewer.classList.add('show')}
 function closeImage(){imageViewer.classList.remove('show');imageViewerImg.removeAttribute('src')}
@@ -149,10 +96,6 @@ $('orderForm').onsubmit=async e=>{
   }
   // sendData does not require initData; Telegram delivers this payload as web_app_data to the bot.
   tg.sendData(JSON.stringify(order));
-  // Keep an explicit empty local cart so an old Telegram snapshot is never restored.
-  try{localStorage.setItem('bearModeCart','{}')}catch(e){}
-  if(tg?.CloudStorage?.removeItem)tg.CloudStorage.removeItem('bearModeCart',err=>{if(err)console.warn('Cloud cart clear failed',err)});
-  if(tg?.DeviceStorage?.removeItem)tg.DeviceStorage.removeItem('bearModeCart',err=>{if(err)console.warn('Device cart clear failed',err)});
   submitButton.textContent='Заказ отправлен! 🐼';
   toast('Заказ передан боту. Дождись подтверждения в Telegram.');
   setTimeout(()=>tg.close(),900);
