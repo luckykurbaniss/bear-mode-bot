@@ -346,6 +346,19 @@ async def remove_shop_hint(context):
         except Exception:
             log.debug("Shop hint already removed or cannot be deleted")
 
+async def hide_shop_keyboard(context, chat_id):
+    # Telegram only applies ReplyKeyboardRemove on a sent message.
+    # Delete that service message immediately so no blank bubble remains in chat.
+    try:
+        msg = await context.bot.send_message(
+            chat_id=chat_id,
+            text="\\u2060",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        await context.bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
+    except Exception:
+        log.exception("Could not hide shop reply keyboard")
+
 
 async def show_catalog_prompt(chat_id, context):
     # Keep exactly one prompt message per chat.
@@ -394,7 +407,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Show the requested section first; housekeeping runs in the background.
         context.application.create_task(remove_catalog_prompt(context))
         context.application.create_task(remove_shop_hint(context))
-        # Do not send a blank Telegram message just to remove the reply keyboard.
+        context.application.create_task(hide_shop_keyboard(context, q.message.chat_id))
 
         if data == "catalog":
             await q.edit_message_text(
