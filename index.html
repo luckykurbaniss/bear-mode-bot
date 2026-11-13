@@ -80,14 +80,14 @@ function parseCartSnapshot(raw){
   return {items,updatedAt:Number(data?.updatedAt)||0};
  }catch(e){console.warn('Could not read saved cart',e);return null}
 }
-function storageGet(storage){
+function storageGet(storage,key=cartStorageKey){
  return new Promise(resolve=>{
   let finished=false;
   const finish=value=>{if(finished)return;finished=true;clearTimeout(timer);resolve(value)};
   const timer=setTimeout(()=>finish(null),1800);
   try{
    if(!storage||typeof storage.getItem!=='function')return finish(null);
-   storage.getItem(cartStorageKey,(err,value)=>finish(err?null:value||null));
+   storage.getItem(key,(err,value)=>finish(err?null:value||null));
   }catch(e){finish(null)}
  });
 }
@@ -104,12 +104,16 @@ function storageSet(storage,value){
 }
 async function loadCart(){
  let localValue=null;
- try{localValue=localStorage.getItem(cartStorageKey)}catch(e){}
- const remoteValues=await Promise.all([storageGet(tg?.CloudStorage),storageGet(tg?.DeviceStorage)]);
+ try{localValue=localStorage.getItem(cartStorageKey)||localStorage.getItem('bearModeCart')}catch(e){}
+ const remoteValues=await Promise.all([
+  storageGet(tg?.CloudStorage),storageGet(tg?.DeviceStorage),
+  storageGet(tg?.CloudStorage,'bearModeCart'),storageGet(tg?.DeviceStorage,'bearModeCart')
+ ]);
  const snapshots=[localValue,...remoteValues].map(parseCartSnapshot).filter(Boolean);
  snapshots.sort((a,b)=>b.updatedAt-a.updatedAt);
  if(snapshots.length)Object.assign(cart,snapshots[0].items);
  update();
+ if(snapshots.length)saveCart();
 }
 const cartReady=loadCart();
 let cartSaveQueue=Promise.resolve();
