@@ -322,7 +322,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     old_hint_chat_id = context.chat_data.pop("shop_hint_chat_id", None)
     hint = await context.bot.send_message(
         chat_id=update.effective_chat.id,
-        text="🐾 Магазин всегда под лапкой!\\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
@@ -391,7 +391,7 @@ async def set_shop_hint_visibility(context, visible, chat_id):
         return
     hint = await context.bot.send_message(
         chat_id=chat_id,
-        text="🐾 Магазин всегда под лапкой!\nОткрывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
     )
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
