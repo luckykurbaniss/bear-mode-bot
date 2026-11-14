@@ -328,7 +328,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
@@ -348,6 +348,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.delete_message(chat_id=chat_id, message_id=old_id)
             except Exception:
                 log.debug("Legacy shop reminder already removed or cannot be deleted")
+
+        # Keep one separate reminder immediately after the main-menu keyboard.
+        await set_shop_hint_visibility(context, True, chat_id)
 
         # Do not delete previous menu/catalog messages on /start.
         
@@ -481,9 +484,10 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
+        await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     elif data in ("catalog", "delivery", "contact"):
@@ -512,9 +516,8 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
                 ]])
             )
 
-        # Hide the separate reminder after the section is visible.
-        # The per-chat navigation lock and generation check prevent races
-        # when the user taps several menu buttons quickly.
+        # Hide the reminder whenever the user leaves the main menu.
+        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     return ConversationHandler.END
