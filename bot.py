@@ -87,6 +87,12 @@ def init_db():
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
+        # Keep the legacy table available for safe migration on both old
+        # and brand-new databases.
+        conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminders (
+            chat_id INTEGER PRIMARY KEY,
+            message_id INTEGER NOT NULL
+        )""")
         conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminder_messages (
             chat_id INTEGER NOT NULL,
             message_id INTEGER NOT NULL,
