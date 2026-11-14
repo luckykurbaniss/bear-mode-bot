@@ -87,29 +87,41 @@ def init_db():
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
-        conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminders (
-            chat_id INTEGER PRIMARY KEY,
-            message_id INTEGER NOT NULL
+        conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminder_messages (
+            chat_id INTEGER NOT NULL,
+            message_id INTEGER NOT NULL,
+            PRIMARY KEY(chat_id, message_id)
         )""")
+        # Migrate the legacy single-ID record without losing it.
+        conn.execute("""INSERT OR IGNORE INTO shop_reminder_messages(chat_id, message_id)
+                        SELECT chat_id, message_id FROM shop_reminders""")
 
 
-def get_shop_reminder_id(chat_id):
+def get_shop_reminder_ids(chat_id):
     with db_connect() as conn:
-        row = conn.execute(
-            "SELECT message_id FROM shop_reminders WHERE chat_id = ?", (chat_id,)
-        ).fetchone()
-        return row["message_id"] if row else None
+        rows = conn.execute(
+            "SELECT message_id FROM shop_reminder_messages WHERE chat_id = ? ORDER BY message_id",
+            (chat_id,)
+        ).fetchall()
+        return [row["message_id"] for row in rows]
 
 
-def set_shop_reminder_id(chat_id, message_id):
+def add_shop_reminder_id(chat_id, message_id):
     with db_connect() as conn:
-        if message_id is None:
-            conn.execute("DELETE FROM shop_reminders WHERE chat_id = ?", (chat_id,))
+        conn.execute(
+            "INSERT OR IGNORE INTO shop_reminder_messages(chat_id, message_id) VALUES(?, ?)",
+            (chat_id, message_id)
+        )
+
+
+def remove_shop_reminder_ids(chat_id, message_ids=None):
+    with db_connect() as conn:
+        if message_ids is None:
+            conn.execute("DELETE FROM shop_reminder_messages WHERE chat_id = ?", (chat_id,))
         else:
-            conn.execute(
-                """INSERT INTO shop_reminders(chat_id, message_id) VALUES(?, ?)
-                   ON CONFLICT(chat_id) DO UPDATE SET message_id=excluded.message_id""",
-                (chat_id, message_id)
+            conn.executemany(
+                "DELETE FROM shop_reminder_messages WHERE chat_id = ? AND message_id = ?",
+                [(chat_id, mid) for mid in message_ids]
             )
 
 
@@ -388,56 +400,61 @@ async def remove_catalog_prompt(context):
 
 
 async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
-    # Called under the per-chat navigation lock. SQLite preserves the reminder
-    # identity across process restarts and prevents /start from forgetting it.
-    if generation is not None and generation != context.chat_data.get('shop_hint_generation', 0):
+    # Keep every known reminder ID in SQLite, not just the latest one. This is
+    # essential because Telegram messages can outlive a process restart.
+    if generation is not None and generation != context.chat_data.get("shop_hint_generation", 0):
         return
 
-    ids = list(context.chat_data.get('shop_hint_message_ids', []))
-    for mid in (context.chat_data.get('shop_hint_message_id'), get_shop_reminder_id(chat_id)):
-        if mid and mid not in ids:
-            ids.append(mid)
+    ids = list(dict.fromkeys(
+        list(context.chat_data.get("shop_hint_message_ids", []))
+        + [context.chat_data.get("shop_hint_message_id")]
+        + get_shop_reminder_ids(chat_id)
+    ))
+    ids = [mid for mid in ids if mid]
 
     if not visible:
         failed = []
         for mid in ids:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=mid)
+                remove_shop_reminder_ids(chat_id, [mid])
             except Exception:
                 failed.append(mid)
+                add_shop_reminder_id(chat_id, mid)
                 log.warning("Could not delete shop reminder %s; will retry", mid, exc_info=True)
+        context.chat_data["shop_hint_message_ids"] = failed
         if failed:
-            set_shop_reminder_id(chat_id, failed[-1])
             context.chat_data["shop_hint_message_id"] = failed[-1]
             context.chat_data["shop_hint_chat_id"] = chat_id
-            context.chat_data["shop_hint_message_ids"] = failed
         else:
-            set_shop_reminder_id(chat_id, None)
             context.chat_data.pop("shop_hint_message_id", None)
             context.chat_data.pop("shop_hint_chat_id", None)
             context.chat_data.pop("shop_hint_message_ids", None)
         return
 
     if ids:
+        # Keep one reminder visible; remove all other known copies.
         keep = ids[-1]
-        leftovers = []
+        failed = []
         for mid in ids[:-1]:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=mid)
+                remove_shop_reminder_ids(chat_id, [mid])
             except Exception:
-                leftovers.append(mid)
+                failed.append(mid)
+                add_shop_reminder_id(chat_id, mid)
                 log.warning("Could not delete duplicate reminder %s; will retry", mid, exc_info=True)
-        set_shop_reminder_id(chat_id, keep)
+        add_shop_reminder_id(chat_id, keep)
         context.chat_data["shop_hint_message_id"] = keep
         context.chat_data["shop_hint_chat_id"] = chat_id
-        context.chat_data["shop_hint_message_ids"] = leftovers + [keep]
+        context.chat_data["shop_hint_message_ids"] = failed + [keep]
         return
 
     hint = await context.bot.send_message(
         chat_id=chat_id,
         text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
     )
-    set_shop_reminder_id(chat_id, hint.message_id)
+    add_shop_reminder_id(chat_id, hint.message_id)
     context.chat_data["shop_hint_message_id"] = hint.message_id
     context.chat_data["shop_hint_chat_id"] = hint.chat_id
     context.chat_data["shop_hint_message_ids"] = [hint.message_id]
