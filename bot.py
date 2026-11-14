@@ -441,28 +441,24 @@ async def show_catalog_prompt(chat_id, context):
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    # Acknowledge immediately so Telegram stops showing the loading spinner.
+    # Acknowledge immediately to stop Telegram's loading spinner.
     await q.answer()
     data = q.data
 
     if data == "home":
-        await remove_catalog_prompt(context)
         context.user_data.clear()
-        # Show the shop reminder in the same menu message instead of
-        # sending a second message afterward. The persistent shop button
-        # remains in the reply keyboard at the bottom of the chat.
         await q.edit_message_text(
             "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await set_shop_hint_visibility(context, True, q.message.chat_id)
+        # Reminder cleanup/creation is secondary; do it after the visible UI update.
+        context.application.create_task(
+            set_shop_hint_visibility(context, True, q.message.chat_id),
+            update=update,
+        )
+        context.application.create_task(remove_catalog_prompt(context), update=update)
 
     elif data in ("catalog", "delivery", "contact"):
-        # Hide the shop reminder before changing sections to avoid a race
-        # with a quick return to the main menu.
-        await set_shop_hint_visibility(context, False, q.message.chat_id)
-        await remove_catalog_prompt(context)
-
         if data == "catalog":
             await q.edit_message_text(
                 "🍱 *Выбери свой сет:*",
@@ -471,8 +467,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         elif data == "delivery":
             await q.edit_message_text(
-                "🚚 *Доставка BEAR MODE*\n\n"
-                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\n"
+                "🚚 *Доставка BEAR MODE*\\n\\n"
+                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\\n"
                 "Нажми «Выбрать сет», чтобы оформить заказ.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
@@ -488,7 +484,12 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
 
-
+        # Delete the hint and stale prompt only after the new menu is visible.
+        context.application.create_task(
+            set_shop_hint_visibility(context, False, q.message.chat_id),
+            update=update,
+        )
+        context.application.create_task(remove_catalog_prompt(context), update=update)
 
     return ConversationHandler.END
 
