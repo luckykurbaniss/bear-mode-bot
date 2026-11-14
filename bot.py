@@ -349,6 +349,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["start_message_ids"] = sent_ids
         context.chat_data["shop_hint_message_id"] = hint.message_id
         context.chat_data["shop_hint_chat_id"] = hint.chat_id
+        context.chat_data["shop_hint_message_ids"] = [hint.message_id]
 
         try:
             await remove_catalog_prompt(context)
@@ -382,39 +383,61 @@ async def remove_catalog_prompt(context):
             log.debug("Catalog prompt already removed or cannot be deleted")
 
 
-async def set_shop_hint_visibility(context, visible, chat_id):
-    # Serialize visibility changes so rapid taps or overlapping callbacks
-    # cannot send the same reminder twice.
+async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
+    # Serialize all hint changes and ignore stale navigation callbacks.
     locks = context.application.bot_data.setdefault("shop_hint_locks", {})
     lock = locks.setdefault(chat_id, asyncio.Lock())
 
     async with lock:
-        message_id = context.chat_data.get("shop_hint_message_id")
-        saved_chat_id = context.chat_data.get("shop_hint_chat_id")
-
-        if not visible:
-            if message_id and saved_chat_id:
-                try:
-                    await context.bot.delete_message(
-                        chat_id=saved_chat_id,
-                        message_id=message_id
-                    )
-                except Exception:
-                    log.debug("Shop hint already removed or cannot be deleted")
-            context.chat_data.pop("shop_hint_message_id", None)
-            context.chat_data.pop("shop_hint_chat_id", None)
+        current_generation = context.chat_data.get("shop_hint_generation", 0)
+        if generation is not None and generation != current_generation:
             return
 
-        # Keep the existing reminder instead of sending another copy.
-        if message_id and saved_chat_id == chat_id:
+        message_ids = list(context.chat_data.get("shop_hint_message_ids", []))
+        single_id = context.chat_data.get("shop_hint_message_id")
+        if single_id and single_id not in message_ids:
+            message_ids.append(single_id)
+
+        if not visible:
+            # Clear local state first so a later /home cannot reuse stale IDs.
+            context.chat_data.pop("shop_hint_message_id", None)
+            context.chat_data.pop("shop_hint_chat_id", None)
+            context.chat_data.pop("shop_hint_message_ids", None)
+            for message_id in message_ids:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                except Exception:
+                    log.debug("Shop hint already removed or cannot be deleted")
+            return
+
+        # Keep exactly one tracked reminder; remove any older duplicates.
+        if message_ids:
+            keep_id = message_ids[-1]
+            context.chat_data["shop_hint_message_id"] = keep_id
+            context.chat_data["shop_hint_chat_id"] = chat_id
+            context.chat_data["shop_hint_message_ids"] = [keep_id]
+            for message_id in message_ids[:-1]:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                except Exception:
+                    log.debug("Duplicate shop hint already removed or cannot be deleted")
             return
 
         hint = await context.bot.send_message(
             chat_id=chat_id,
             text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
         )
+        # If navigation changed while send_message was in flight, remove this
+        # newly created stale reminder instead of registering it.
+        if generation is not None and generation != context.chat_data.get("shop_hint_generation", 0):
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=hint.message_id)
+            except Exception:
+                pass
+            return
         context.chat_data["shop_hint_message_id"] = hint.message_id
         context.chat_data["shop_hint_chat_id"] = hint.chat_id
+        context.chat_data["shop_hint_message_ids"] = [hint.message_id]
 
 
 async def remove_shop_hint(context):
@@ -444,6 +467,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Acknowledge without blocking the visible menu update.
     context.application.create_task(q.answer(), update=update)
     data = q.data
+    # Each navigation tap supersedes earlier pending reminder operations.
+    generation = context.chat_data.get("shop_hint_generation", 0) + 1
+    context.chat_data["shop_hint_generation"] = generation
 
     if data == "home":
         context.user_data.clear()
@@ -453,7 +479,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         # Apply reminder state sequentially after the menu is visible.
         # Awaiting here prevents racing background tasks from leaving stale copies.
-        await set_shop_hint_visibility(context, True, q.message.chat_id)
+        await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     elif data in ("catalog", "delivery", "contact"):
@@ -484,7 +510,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Remove the reminder only after the new section is visible.
         # Sequential cleanup avoids races when the user quickly changes sections.
-        await set_shop_hint_visibility(context, False, q.message.chat_id)
+        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     return ConversationHandler.END
