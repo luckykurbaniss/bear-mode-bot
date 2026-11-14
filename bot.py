@@ -31,7 +31,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5500196056").strip()  # BEAR MODE admin Telegram chat
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
@@ -767,10 +767,15 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception:
             delete_order(order_id)
             raise
-        await message.reply_text(
-            "🎉 Заказ отправлен! Спасибо!\n"
-            "Мы скоро свяжемся с вами для подтверждения доставки."
-        )
+        try:
+            await message.reply_text(
+                "🎉 Заказ отправлен! Спасибо!\n"
+                "Мы скоро свяжемся с вами для подтверждения доставки."
+            )
+        except Exception:
+            # The administrator already received and the database saved the order.
+            # A failed customer acknowledgement must not report a false order failure.
+            log.exception("Order %s was forwarded, but customer acknowledgement failed", order_id)
     except (ValueError, TypeError, json.JSONDecodeError):
         log.exception("Invalid order received from website")
         await message.reply_text(
@@ -950,6 +955,8 @@ quantity = serialize_chat_navigation(quantity)
 async def main():
     if not BOT_TOKEN:
         raise RuntimeError("Set BOT_TOKEN in your environment variables.")
+    if not ADMIN_CHAT_ID or not ADMIN_CHAT_ID.isdigit() or int(ADMIN_CHAT_ID) <= 0:
+        raise RuntimeError("Set ADMIN_CHAT_ID to the numeric Telegram user/chat ID of the store administrator.")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
