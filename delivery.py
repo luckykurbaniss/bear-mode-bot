@@ -109,7 +109,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Нет доступа.", show_alert=True)
         return
     parts = q.data.split(":")
-    if len(parts) < 3 or parts[1] not in {"order", "delivery"}:
+    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set"}:
         return
 
     if parts[1] == "order":
@@ -125,16 +125,27 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Некорректное действие.", show_alert=True)
         return
     order_id, action = int(parts[2]), parts[3]
-    if action not in DELIVERY_ACTIONS:
-        await q.answer("Неизвестное действие.", show_alert=True)
-        return
     order = _get_order(order_id)
     if not order:
         await q.answer("Заказ не найден.", show_alert=True)
         return
 
     notice = None
-    if action == "grab_requested":
+    if parts[1] == "set":
+        status_messages = {
+            "new": "Мы получили ваш заказ и скоро свяжемся с вами для подтверждения.",
+            "confirmed": "Ваш заказ подтверждён! Спасибо.",
+            "cooking": "Ваш заказ уже готовится на кухне.",
+            "courier": "Ваш заказ передан курьеру и скоро будет у вас.",
+            "delivered": "Ваш заказ отмечен как доставленный. Приятного аппетита!",
+            "cancelled": "К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+        }
+        if action not in status_messages:
+            await q.answer("Неизвестный статус.", show_alert=True)
+            return
+        _set_value(order_id, "status", action)
+        notice = status_messages[action]
+    elif action == "grab_requested":
         _set_value(order_id, "grab_status", "requested")
     elif action == "picked_up":
         _set_value(order_id, "grab_status", "picked_up")
