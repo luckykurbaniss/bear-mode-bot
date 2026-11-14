@@ -1001,7 +1001,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
-    app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=1)
+    app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
     app.add_handler(conv)
     app.add_handler(
         CallbackQueryHandler(
