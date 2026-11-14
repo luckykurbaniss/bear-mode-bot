@@ -494,8 +494,9 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    # Acknowledge the tap immediately; avoid extra Telegram API calls before
+    # editing the current menu message.
     await q.answer()
-    await remove_catalog_prompt(context)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
