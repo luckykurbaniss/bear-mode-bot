@@ -6,6 +6,7 @@ import sqlite3
 import hashlib
 import hmac
 import time
+import uuid
 from urllib.parse import parse_qsl
 from aiohttp import web
 
@@ -84,7 +85,7 @@ def backup_database():
 
     backup_dir = Path(os.getenv("DB_BACKUP_DIR", str(source.parent / "backups")))
     backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(VN_TZ).strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(VN_TZ).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
     destination = backup_dir / f"bear_mode_{stamp}.db"
     temporary = backup_dir / f".bear_mode_{stamp}.tmp"
 
@@ -125,7 +126,7 @@ def verify_latest_backup_restore():
 
     source_backup = backups[0]
     live_db = Path(DB_PATH)
-    test_restore = backup_dir / ".restore_verification.tmp"
+    test_restore = backup_dir / f".restore_verification_{uuid.uuid4().hex}.tmp"
 
     try:
         with sqlite3.connect(str(source_backup), timeout=30) as src:
