@@ -335,19 +335,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐼 Выбирай, что будем делать:\n\n"
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — "
-            "кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
         sent_ids.append(msg.message_id)
         context.chat_data["start_message_ids"] = sent_ids
-        # The reminder is part of the menu message itself; no extra message
-        # is sent, so it cannot duplicate or get out of sync during navigation.
-        context.chat_data["shop_hint_message_id"] = msg.message_id
-        context.chat_data["shop_hint_chat_id"] = chat_id
-        context.chat_data["shop_hint_message_ids"] = [msg.message_id]
+        # Send the reminder after the inline menu so it appears below
+        # the "Связаться" button, and track its ID for reliable cleanup.
+        hint = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        )
+        context.chat_data["shop_hint_message_id"] = hint.message_id
+        context.chat_data["shop_hint_chat_id"] = hint.chat_id
+        context.chat_data["shop_hint_message_ids"] = [hint.message_id]
 
         try:
             await remove_catalog_prompt(context)
@@ -489,12 +491,11 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\n\n"
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — "
-            "кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        # Reminder is embedded in this one editable menu message.
+        # Restore one reminder after the inline menu buttons.
+        await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     elif data in ("catalog", "delivery", "contact"):
