@@ -534,6 +534,10 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ К сетам", callback_data="catalog")]
         ])
     )
+    # Selecting a set is a non-home screen: hide the shop reminder.
+    generation = context.chat_data.get("shop_hint_generation", 0) + 1
+    context.chat_data["shop_hint_generation"] = generation
+    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -543,11 +547,17 @@ async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.create_task(remove_catalog_prompt(context), update=update)
     if q.data == "catalog":
         await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
+        generation = context.chat_data.get("shop_hint_generation", 0) + 1
+        context.chat_data["shop_hint_generation"] = generation
+        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         return SET
     qty = int(q.data.split("_")[1])
     context.user_data["quantity"] = qty
     context.user_data["total"] = qty * PRICE
     await q.edit_message_text(f"Отлично! {qty} порц. — {context.user_data['total']:,} ₫\n\nКак вас зовут?".replace(",", "."))
+    generation = context.chat_data.get("shop_hint_generation", 0) + 1
+    context.chat_data["shop_hint_generation"] = generation
+    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
