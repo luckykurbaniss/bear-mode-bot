@@ -317,9 +317,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 log.debug("Previous /start message already removed or cannot be deleted")
 
         welcome = (
-            "🐻 *BEAR MODE — еда с характером!*\\n\\n"
-            "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\\n"
-            "Выбирай готовый сет или собери свой заказ!\\n\\n"
+            "🐻 *BEAR MODE — еда с характером!*\n\n"
+            "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
+            "Выбирай готовый сет или собери свой заказ!\n\n"
             "🔥 Готовые сеты — 170.000 ₫"
         )
         shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
