@@ -312,9 +312,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Remove the previous /start block before creating a fresh one.
         old_ids = context.chat_data.pop("start_message_ids", [])
         old_hint_id = context.chat_data.pop("shop_hint_message_id", None)
+        old_hint_ids = context.chat_data.pop("shop_hint_message_ids", [])
         context.chat_data.pop("shop_hint_chat_id", None)
-        if old_hint_id:
-            old_ids.append(old_hint_id)
+        for message_id in [old_hint_id, *old_hint_ids]:
+            if message_id and message_id not in old_ids:
+                old_ids.append(message_id)
         for message_id in old_ids:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -530,8 +532,10 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
                 ]])
             )
 
-        # The reminder disappears automatically because this same message
-        # is edited into the selected section; no separate delete/send calls.
+        # Hide the separate reminder after the section is visible.
+        # The per-chat navigation lock and generation check prevent races
+        # when the user taps several menu buttons quickly.
+        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     return ConversationHandler.END
