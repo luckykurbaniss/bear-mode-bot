@@ -121,7 +121,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         context.user_data["pending_grab_reference_order_id"] = order_id
         prompt = await q.message.reply_text(
             f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение.\n"
-            "Чтобы отменить ввод, отправьте /cancel."
+            "Если передумали, просто не отправляйте ответ."
         )
         context.user_data["pending_grab_reference_prompt_id"] = prompt.message_id
         await q.answer("Жду Grab ID")
