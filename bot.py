@@ -18,6 +18,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
+from delivery import init_delivery_db, delivery_admin_callback
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -989,12 +990,15 @@ async def main():
     )
 
     init_db()
+    init_delivery_db()  # Additive migration; existing orders are preserved.
     # Keep /start independent from ConversationHandler state so it always resets
     # the chat and shows the main menu, even after an interrupted conversation.
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("ping", ping_command))
     app.add_handler(CommandHandler("admin", admin_command))
+    # Handle order details and delivery controls before the general admin callback.
+    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(conv)
