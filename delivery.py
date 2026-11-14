@@ -93,6 +93,7 @@ def _order_keyboard(order):
         if row:
             rows.append(row)
     rows.extend([
+        [InlineKeyboardButton("🧾 Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
         [InlineKeyboardButton("🚚 Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
         [InlineKeyboardButton("🛵 Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton("💵 Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
@@ -109,7 +110,21 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Нет доступа.", show_alert=True)
         return
     parts = q.data.split(":")
-    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set"}:
+    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference"}:
+        return
+
+    if parts[1] == "reference":
+        order_id = int(parts[2])
+        if not _get_order(order_id):
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        context.user_data["pending_grab_reference_order_id"] = order_id
+        prompt = await q.message.reply_text(
+            f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение.\n"
+            "Чтобы отменить ввод, отправьте /cancel."
+        )
+        context.user_data["pending_grab_reference_prompt_id"] = prompt.message_id
+        await q.answer("Жду Grab ID")
         return
 
     if parts[1] == "order":
@@ -170,3 +185,30 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
     updated = _get_order(order_id)
     await q.edit_message_text(_order_text(updated), reply_markup=_order_keyboard(updated))
     await q.answer("Обновлено")
+
+
+async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Save a Grab booking/reference ID sent as a reply to the admin prompt."""
+    if not _admin_only(update) or not update.effective_message:
+        return
+    pending_order_id = context.user_data.get("pending_grab_reference_order_id")
+    prompt_id = context.user_data.get("pending_grab_reference_prompt_id")
+    reply = update.effective_message.reply_to_message
+    if not pending_order_id or not prompt_id or not reply or reply.message_id != prompt_id:
+        return
+    reference = (update.effective_message.text or "").strip()
+    if not reference or len(reference) > 120 or any(ord(ch) < 32 for ch in reference):
+        await update.effective_message.reply_text("Некорректный Grab ID. Отправьте значение длиной до 120 символов.")
+        return
+    order = _get_order(pending_order_id)
+    if not order:
+        context.user_data.pop("pending_grab_reference_order_id", None)
+        context.user_data.pop("pending_grab_reference_prompt_id", None)
+        await update.effective_message.reply_text("Заказ не найден. Откройте его заново в панели.")
+        return
+    with db_connect() as conn:
+        conn.execute("UPDATE orders SET grab_reference = ? WHERE id = ?", (reference, pending_order_id))
+    context.user_data.pop("pending_grab_reference_order_id", None)
+    context.user_data.pop("pending_grab_reference_prompt_id", None)
+    updated = _get_order(pending_order_id)
+    await update.effective_message.reply_text("✅ Grab ID сохранён.\n\n" + _order_text(updated))
