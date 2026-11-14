@@ -938,6 +938,27 @@ async def telegram_error_handler(update: object, context: ContextTypes.DEFAULT_T
         log.error("Telegram update failed without an exception object")
 
 
+def serialize_chat_navigation(handler):
+    """Run every menu transition and /start reset sequentially per chat."""
+    async def wrapped(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        chat = update.effective_chat
+        if chat is None:
+            return await handler(update, context)
+        locks = context.application.bot_data.setdefault("menu_navigation_locks", {})
+        lock = locks.setdefault(chat.id, asyncio.Lock())
+        async with lock:
+            return await handler(update, context)
+    wrapped.__name__ = handler.__name__
+    return wrapped
+
+
+# These handlers must share the same lock as menu_callback. Otherwise a fast
+# tap can race a reminder send/delete and leave duplicate shop messages.
+start = serialize_chat_navigation(start)
+choose_set = serialize_chat_navigation(choose_set)
+quantity = serialize_chat_navigation(quantity)
+
+
 async def main():
     if not BOT_TOKEN:
         raise RuntimeError("Set BOT_TOKEN in your environment variables.")
