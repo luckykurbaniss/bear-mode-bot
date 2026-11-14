@@ -3,6 +3,7 @@ import os
 import sqlite3
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 log = logging.getLogger(__name__)
@@ -171,7 +172,12 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         _set_value(order_id, "status", action)
         notice = status_messages[action]
     elif action == "grab_requested":
+        previous_status = order["grab_status"] or "not_requested"
         _set_value(order_id, "grab_status", "requested")
+        log.info(
+            "Grab status updated: order_id=%s previous=%s new=requested",
+            order_id, previous_status,
+        )
     elif action == "picked_up":
         _set_value(order_id, "grab_status", "picked_up")
         _set_value(order_id, "status", "courier")
@@ -190,7 +196,17 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             log.exception("Could not notify customer about delivery update for order %s", order_id)
 
     updated = _get_order(order_id)
-    await q.edit_message_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+    try:
+        await q.edit_message_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+    except BadRequest as exc:
+        if "Message is not modified" not in str(exc):
+            raise
+        log.info(
+            "Delivery card already shows current values: order_id=%s action=%s",
+            order_id, action,
+        )
+        await q.answer("Этот статус уже установлен.")
+        return
     await q.answer("Обновлено")
 
 
