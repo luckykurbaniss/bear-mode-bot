@@ -101,6 +101,7 @@ def init_db():
         # Migrate the legacy single-ID record without losing it.
         conn.execute("""INSERT OR IGNORE INTO shop_reminder_messages(chat_id, message_id)
                         SELECT chat_id, message_id FROM shop_reminders""")
+        conn.execute("DELETE FROM shop_reminders")
 
 
 def get_shop_reminder_ids(chat_id):
