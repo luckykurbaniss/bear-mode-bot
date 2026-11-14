@@ -306,19 +306,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  chat_id, update.effective_user.id if update.effective_user else None, update_id)
         context.user_data.clear()
 
-        # Remove the previous /start block before creating a fresh one.
-        old_ids = context.chat_data.pop("start_message_ids", [])
-        old_hint_id = context.chat_data.pop("shop_hint_message_id", None)
-        old_hint_ids = context.chat_data.pop("shop_hint_message_ids", [])
-        context.chat_data.pop("shop_hint_chat_id", None)
-        for message_id in [old_hint_id, *old_hint_ids]:
-            if message_id and message_id not in old_ids:
-                old_ids.append(message_id)
-        for message_id in old_ids:
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-            except Exception:
-                log.debug("Previous /start message already removed or cannot be deleted")
+        # Keep the previous conversation visible. /start appends a fresh
+        # welcome/menu cycle below it, just like a new conversation start.
 
         welcome = (
             "🐻 *BEAR MODE — еда с характером!*\n\n"
@@ -356,11 +345,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["shop_hint_message_ids"] = [hint.message_id]
         context.chat_data["start_message_ids"].append(hint.message_id)
 
-        try:
-            await remove_catalog_prompt(context)
-        except Exception:
-            log.exception("Could not clean up old menu messages; /start response was sent")
-
+        # Do not delete previous menu/catalog messages on /start.
+        
         # Do not reset Telegram's menu button on every /start.
         # It is persistent and does not need another network round trip.
 
