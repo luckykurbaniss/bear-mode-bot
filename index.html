@@ -56,10 +56,10 @@ const dishes=[
 {id:'vegetable_salad',name:'Овощной салат',price:35000,photo:'assets/vegetable-salad.jpg'},
 {id:'freshness_salad',name:'Салат «Свежесть»',price:35000,photo:'assets/freshness-salad.jpg'},
 {id:'vitamin_salad',name:'Витаминный салат',price:35000,photo:'assets/vitamin-salad.jpg'},
-{id:'omelet',name:'Омлет',price:20000,photo:'assets/omelet.jpg'},
+{id:'omelet',name:'Омлет',price:15000,photo:'assets/omelet.jpg'},
 {id:'egg',name:'Яйцо отварное',price:15000,photo:'assets/boiled-egg.jpg'},
 
-{id:'mors',name:'Морс',price:20000,photo:'assets/mors.jpg'},
+{id:'mors',name:'Морс',price:15000,photo:'assets/mors.jpg'},
 {id:'baguette',name:'Багет',price:15000,photo:'assets/baguette.jpg'}
 ];
 const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
