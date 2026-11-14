@@ -7,7 +7,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonDefault
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -753,6 +753,8 @@ async def main():
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
+    # Clear any previously configured Mini App menu button; ordering now uses Telegram inline buttons.
+    await app.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
     # Ensure Telegram is not holding updates for a webhook while this bot uses polling.
     await app.bot.delete_webhook(drop_pending_updates=False)
     print("BEAR MODE: webhook cleared; pending updates preserved.", flush=True)
