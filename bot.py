@@ -31,7 +31,7 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5500196056").strip()  # BEAR MODE admin Telegram chat
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
 API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
@@ -950,6 +950,8 @@ quantity = serialize_chat_navigation(quantity)
 async def main():
     if not BOT_TOKEN:
         raise RuntimeError("Set BOT_TOKEN in your environment variables.")
+    if not ADMIN_CHAT_ID or not ADMIN_CHAT_ID.isdigit() or int(ADMIN_CHAT_ID) <= 0:
+        raise RuntimeError("Set ADMIN_CHAT_ID to the numeric Telegram user/chat ID of the store administrator.")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
