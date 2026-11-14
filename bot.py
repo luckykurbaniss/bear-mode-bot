@@ -125,7 +125,6 @@ def verify_latest_backup_restore():
         raise FileNotFoundError("No automatic backup files found")
 
     source_backup = backups[0]
-    live_db = Path(DB_PATH)
     test_restore = backup_dir / f".restore_verification_{uuid.uuid4().hex}.tmp"
 
     try:
@@ -145,6 +144,13 @@ def verify_latest_backup_restore():
                 restored_count, restored_max_id = dst.execute(
                     "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM orders"
                 ).fetchone()
+                restored_columns = [
+                    tuple(row) for row in dst.execute("PRAGMA table_info(orders)").fetchall()
+                ]
+                restored_rows = dst.execute("SELECT * FROM orders ORDER BY id").fetchall()
+                restored_digest = hashlib.sha256(
+                    repr([tuple(row) for row in restored_rows]).encode("utf-8")
+                ).hexdigest()
 
         # Compare the restored copy to its immutable source backup, not the live DB.
         # New orders may arrive while a backup is being verified.
@@ -155,11 +161,24 @@ def verify_latest_backup_restore():
             original_count, original_max_id = original.execute(
                 "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM orders"
             ).fetchone()
-        if (restored_count, restored_max_id) != (original_count, original_max_id):
+            original_columns = [
+                tuple(row) for row in original.execute("PRAGMA table_info(orders)").fetchall()
+            ]
+            original_rows = original.execute("SELECT * FROM orders ORDER BY id").fetchall()
+            original_digest = hashlib.sha256(
+                repr([tuple(row) for row in original_rows]).encode("utf-8")
+            ).hexdigest()
+        if (
+            (restored_count, restored_max_id) != (original_count, original_max_id)
+            or restored_columns != original_columns
+            or restored_digest != original_digest
+        ):
             raise RuntimeError(
                 "Restored copy differs from source backup: "
                 f"restored orders={restored_count}, max_id={restored_max_id}; "
-                f"source orders={original_count}, max_id={original_max_id}"
+                f"source orders={original_count}, max_id={original_max_id}; "
+                f"schema_match={restored_columns == original_columns}; "
+                f"data_match={restored_digest == original_digest}"
             )
         return source_backup.name, restored_count, restored_max_id
     finally:
