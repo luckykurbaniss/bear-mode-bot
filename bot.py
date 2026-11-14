@@ -306,10 +306,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Remove the previous /start block before creating a fresh one.
         old_ids = context.chat_data.pop("start_message_ids", [])
+        old_hint_ids = list(context.chat_data.pop("shop_hint_message_ids", []))
         old_hint_id = context.chat_data.pop("shop_hint_message_id", None)
         context.chat_data.pop("shop_hint_chat_id", None)
-        if old_hint_id:
-            old_ids.append(old_hint_id)
+        if old_hint_id and old_hint_id not in old_hint_ids:
+            old_hint_ids.append(old_hint_id)
+        for hint_id in old_hint_ids:
+            if hint_id not in old_ids:
+                old_ids.append(hint_id)
         for message_id in old_ids:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
@@ -384,56 +388,74 @@ async def remove_catalog_prompt(context):
 
 
 async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
-    # Serialize all hint changes and ignore stale navigation callbacks.
+    # All reminder changes for a chat are serialized. Keep IDs until Telegram
+    # confirms deletion; otherwise a failed delete followed by /home could send
+    # another reminder while the old one is still visible.
     locks = context.application.bot_data.setdefault("shop_hint_locks", {})
     lock = locks.setdefault(chat_id, asyncio.Lock())
 
     async with lock:
-        current_generation = context.chat_data.get("shop_hint_generation", 0)
-        if generation is not None and generation != current_generation:
+        if generation is not None and generation != context.chat_data.get("shop_hint_generation", 0):
             return
 
         message_ids = list(context.chat_data.get("shop_hint_message_ids", []))
         single_id = context.chat_data.get("shop_hint_message_id")
         if single_id and single_id not in message_ids:
             message_ids.append(single_id)
+        message_ids = list(dict.fromkeys(message_ids))
+
+        async def delete_tracked(ids):
+            remaining = []
+            for message_id in ids:
+                try:
+                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                except Exception as exc:
+                    # "Message to delete not found" means it is already gone.
+                    # Other errors may be temporary/permission-related: retain
+                    # the ID so we never create a second visible reminder.
+                    error_text = str(exc).lower()
+                    if "message to delete not found" not in error_text and "message_id_invalid" not in error_text:
+                        remaining.append(message_id)
+                        log.warning("Could not delete shop hint %s: %s", message_id, exc)
+                else:
+                    continue
+            context.chat_data["shop_hint_message_ids"] = remaining
+            if remaining:
+                context.chat_data["shop_hint_message_id"] = remaining[-1]
+                context.chat_data["shop_hint_chat_id"] = chat_id
+            else:
+                context.chat_data.pop("shop_hint_message_ids", None)
+                context.chat_data.pop("shop_hint_message_id", None)
+                context.chat_data.pop("shop_hint_chat_id", None)
+            return remaining
 
         if not visible:
-            # Clear local state first so a later /home cannot reuse stale IDs.
-            context.chat_data.pop("shop_hint_message_id", None)
-            context.chat_data.pop("shop_hint_chat_id", None)
-            context.chat_data.pop("shop_hint_message_ids", None)
-            for message_id in message_ids:
-                try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-                except Exception:
-                    log.debug("Shop hint already removed or cannot be deleted")
+            await delete_tracked(message_ids)
             return
 
-        # Keep exactly one tracked reminder; remove any older duplicates.
+        # If a reminder is already present, retain one and remove tracked extras.
         if message_ids:
             keep_id = message_ids[-1]
+            remaining = await delete_tracked(message_ids[:-1])
+            if keep_id not in remaining:
+                remaining.append(keep_id)
+            context.chat_data["shop_hint_message_ids"] = remaining
             context.chat_data["shop_hint_message_id"] = keep_id
             context.chat_data["shop_hint_chat_id"] = chat_id
-            context.chat_data["shop_hint_message_ids"] = [keep_id]
-            for message_id in message_ids[:-1]:
-                try:
-                    await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-                except Exception:
-                    log.debug("Duplicate shop hint already removed or cannot be deleted")
             return
 
         hint = await context.bot.send_message(
             chat_id=chat_id,
             text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
         )
-        # If navigation changed while send_message was in flight, remove this
-        # newly created stale reminder instead of registering it.
         if generation is not None and generation != context.chat_data.get("shop_hint_generation", 0):
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=hint.message_id)
             except Exception:
-                pass
+                # Keep the message ID: a later visibility change can clean it up.
+                context.chat_data["shop_hint_message_id"] = hint.message_id
+                context.chat_data["shop_hint_chat_id"] = chat_id
+                context.chat_data["shop_hint_message_ids"] = [hint.message_id]
             return
         context.chat_data["shop_hint_message_id"] = hint.message_id
         context.chat_data["shop_hint_chat_id"] = hint.chat_id
@@ -548,6 +570,8 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ К сетам", callback_data="catalog")]
         ])
     )
+    # The reminder must also be hidden when entering an individual set/order flow.
+    await set_shop_hint_visibility(context, False, q.message.chat_id)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
