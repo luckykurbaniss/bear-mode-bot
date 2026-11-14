@@ -458,9 +458,6 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await _menu_callback_locked(update, context, generation)
-
-async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TYPE, generation: int):
     q = update.callback_query
     # Acknowledge without blocking the visible menu update.
     context.application.create_task(q.answer(), update=update)
@@ -673,8 +670,7 @@ def serialize_chat_navigation(handler):
     return wrapped
 
 
-# These handlers must share the same lock as menu_callback. Otherwise a fast
-# tap can race a reminder send/delete and leave duplicate shop messages.
+# Serialize menu navigation per chat to avoid overlapping screen transitions.
 start = serialize_chat_navigation(start)
 menu_callback = serialize_chat_navigation(menu_callback)
 choose_set = serialize_chat_navigation(choose_set)
