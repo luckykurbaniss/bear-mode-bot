@@ -170,10 +170,10 @@ async def backupcheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             verify_latest_backup_restore
         )
         await update.effective_message.reply_text(
-            "✅ Проверка восстановления пройдена.\\n"
-            f"Файл: {filename}\\n"
-            f"Заказов в восстановленной копии: {order_count}\\n"
-            f"Последний номер заказа: {max_order_id}\\n"
+            "✅ Проверка восстановления пройдена.\n"
+            f"Файл: {filename}\n"
+            f"Заказов в восстановленной копии: {order_count}\n"
+            f"Последний номер заказа: {max_order_id}\n"
             "Рабочая база не изменялась."
         )
     except Exception:
