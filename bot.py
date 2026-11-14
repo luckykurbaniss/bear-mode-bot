@@ -111,6 +111,79 @@ def backup_database():
         temporary.unlink(missing_ok=True)
 
 
+
+def verify_latest_backup_restore():
+    """Restore the newest backup to a temporary DB and compare core order data."""
+    backup_dir = Path(os.getenv("DB_BACKUP_DIR", str(Path(DB_PATH).parent / "backups")))
+    backups = sorted(
+        backup_dir.glob("bear_mode_*.db"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not backups:
+        raise FileNotFoundError("No automatic backup files found")
+
+    source_backup = backups[0]
+    live_db = Path(DB_PATH)
+    test_restore = backup_dir / ".restore_verification.tmp"
+
+    try:
+        with sqlite3.connect(str(source_backup), timeout=30) as src:
+            with sqlite3.connect(str(test_restore), timeout=30) as dst:
+                src.backup(dst)
+                integrity = dst.execute("PRAGMA integrity_check").fetchone()[0]
+                if integrity != "ok":
+                    raise RuntimeError(f"Restored copy integrity check failed: {integrity}")
+                restored_tables = {
+                    row[0] for row in dst.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    ).fetchall()
+                }
+                if "orders" not in restored_tables:
+                    raise RuntimeError("Restored copy does not contain the orders table")
+                restored_count, restored_max_id = dst.execute(
+                    "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM orders"
+                ).fetchone()
+
+        with sqlite3.connect(str(live_db), timeout=30) as live:
+            live_count, live_max_id = live.execute(
+                "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM orders"
+            ).fetchone()
+
+        if (restored_count, restored_max_id) != (live_count, live_max_id):
+            raise RuntimeError(
+                "Backup differs from live DB: "
+                f"backup orders={restored_count}, max_id={restored_max_id}; "
+                f"live orders={live_count}, max_id={live_max_id}"
+            )
+        return source_backup.name, restored_count, restored_max_id
+    finally:
+        test_restore.unlink(missing_ok=True)
+
+
+async def backupcheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not admin_only(update):
+        await update.effective_message.reply_text("⛔ Эта команда доступна только администратору.")
+        return
+    try:
+        filename, order_count, max_order_id = await asyncio.to_thread(
+            verify_latest_backup_restore
+        )
+        await update.effective_message.reply_text(
+            "✅ Проверка восстановления пройдена.\\n"
+            f"Файл: {filename}\\n"
+            f"Заказов в восстановленной копии: {order_count}\\n"
+            f"Последний номер заказа: {max_order_id}\\n"
+            "Рабочая база не изменялась."
+        )
+    except Exception:
+        log.exception("Backup restore verification failed")
+        await update.effective_message.reply_text(
+            "❌ Проверка резервной копии не пройдена. Рабочая база не изменялась. "
+            "Проверьте журналы Railway."
+        )
+
+
 async def automatic_backup_loop():
     """Create one verified backup at startup and then every 24 hours."""
     while True:
@@ -1055,6 +1128,7 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("myid", myid))
     app.add_handler(CommandHandler("ping", ping_command))
+    app.add_handler(CommandHandler("backupcheck", backupcheck_command))
     app.add_handler(CommandHandler("admin", admin_command))
     # Handle order details and delivery controls before the general admin callback.
     app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference):"))
