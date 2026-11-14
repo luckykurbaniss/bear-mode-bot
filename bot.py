@@ -467,8 +467,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         elif data == "delivery":
             await q.edit_message_text(
-                "🚚 *Доставка BEAR MODE*\\n\\n"
-                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\\n"
+                "🚚 *Доставка BEAR MODE*\n\n"
+                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\n"
                 "Нажми «Выбрать сет», чтобы оформить заказ.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
