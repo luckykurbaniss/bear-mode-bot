@@ -186,9 +186,23 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if action not in status_messages:
             await q.answer("Неизвестный статус.", show_alert=True)
             return
+        allowed_next = {
+            "new": {"confirmed", "cancelled"},
+            "confirmed": {"cooking", "cancelled"},
+            "cooking": {"courier", "cancelled"},
+            "courier": {"delivered"},
+            "delivered": set(),
+            "cancelled": set(),
+        }
+        if action not in allowed_next.get(order["status"], set()):
+            await q.answer("Недопустимый переход статуса заказа.", show_alert=True)
+            return
         _set_value(order_id, "status", action)
         notice = status_messages[action]
     elif action == "grab_requested":
+        if order["status"] in {"new", "delivered", "cancelled"}:
+            await q.answer("Вызвать Grab можно только для активного подтверждённого заказа.", show_alert=True)
+            return
         previous_status = order["grab_status"] or "not_requested"
         _set_value(order_id, "grab_status", "requested")
         log.info(
@@ -196,15 +210,29 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             order_id, previous_status,
         )
     elif action == "picked_up":
+        if order["status"] not in {"cooking", "courier"}:
+            await q.answer("Сначала подтвердите заказ и отметьте, что он готовится.", show_alert=True)
+            return
         _set_value(order_id, "grab_status", "picked_up")
         _set_value(order_id, "status", "courier")
         notice = "🛵 Ваш заказ передан курьеру GrabExpress и скоро будет у вас."
     elif action == "payment_received":
+        if order["status"] == "cancelled":
+            await q.answer("Для отменённого заказа нельзя отметить оплату.", show_alert=True)
+            return
         _set_value(order_id, "payment_status", "received")
     elif action == "delivered":
-        _set_value(order_id, "grab_status", "delivered")
-        _set_value(order_id, "status", "delivered")
-        notice = "🎉 Ваш заказ доставлен! Спасибо, что выбрали BEAR MODE."
+        if order["status"] == "delivered":
+            # The general order-status button may have marked delivery first.
+            # Synchronize the Grab field without notifying the customer twice.
+            _set_value(order_id, "grab_status", "delivered")
+        elif order["status"] == "courier":
+            _set_value(order_id, "grab_status", "delivered")
+            _set_value(order_id, "status", "delivered")
+            notice = "🎉 Ваш заказ доставлен! Спасибо, что выбрали BEAR MODE."
+        else:
+            await q.answer("Сначала отметьте передачу заказа курьеру.", show_alert=True)
+            return
 
     if notice and order["customer_chat_id"]:
         try:

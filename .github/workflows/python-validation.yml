@@ -1,0 +1,23 @@
+name: Python validation
+
+on:
+  pull_request:
+    branches:
+      - checkpoint/pytka-6
+  push:
+    branches:
+      - checkpoint/pytka-6
+      - fix/pytka6-audit-hardening
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Python modules
+        run: python -m py_compile bot.py delivery.py
+      - name: Check whitespace and patch errors
+        run: git diff --check

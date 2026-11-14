@@ -6,6 +6,7 @@ import sqlite3
 import hashlib
 import hmac
 import time
+import uuid
 from urllib.parse import parse_qsl
 from aiohttp import web
 
@@ -84,7 +85,7 @@ def backup_database():
 
     backup_dir = Path(os.getenv("DB_BACKUP_DIR", str(source.parent / "backups")))
     backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(VN_TZ).strftime("%Y%m%d_%H%M%S")
+    stamp = datetime.now(VN_TZ).strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
     destination = backup_dir / f"bear_mode_{stamp}.db"
     temporary = backup_dir / f".bear_mode_{stamp}.tmp"
 
@@ -124,8 +125,7 @@ def verify_latest_backup_restore():
         raise FileNotFoundError("No automatic backup files found")
 
     source_backup = backups[0]
-    live_db = Path(DB_PATH)
-    test_restore = backup_dir / ".restore_verification.tmp"
+    test_restore = backup_dir / f".restore_verification_{uuid.uuid4().hex}.tmp"
 
     try:
         with sqlite3.connect(str(source_backup), timeout=30) as src:
@@ -144,17 +144,41 @@ def verify_latest_backup_restore():
                 restored_count, restored_max_id = dst.execute(
                     "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM orders"
                 ).fetchone()
+                restored_columns = [
+                    tuple(row) for row in dst.execute("PRAGMA table_info(orders)").fetchall()
+                ]
+                restored_rows = dst.execute("SELECT * FROM orders ORDER BY id").fetchall()
+                restored_digest = hashlib.sha256(
+                    repr([tuple(row) for row in restored_rows]).encode("utf-8")
+                ).hexdigest()
 
-        with sqlite3.connect(str(live_db), timeout=30) as live:
-            live_count, live_max_id = live.execute(
+        # Compare the restored copy to its immutable source backup, not the live DB.
+        # New orders may arrive while a backup is being verified.
+        with sqlite3.connect(str(source_backup), timeout=30) as original:
+            original_integrity = original.execute("PRAGMA integrity_check").fetchone()[0]
+            if original_integrity != "ok":
+                raise RuntimeError(f"Source backup integrity check failed: {original_integrity}")
+            original_count, original_max_id = original.execute(
                 "SELECT COUNT(*), COALESCE(MAX(id), 0) FROM orders"
             ).fetchone()
-
-        if (restored_count, restored_max_id) != (live_count, live_max_id):
+            original_columns = [
+                tuple(row) for row in original.execute("PRAGMA table_info(orders)").fetchall()
+            ]
+            original_rows = original.execute("SELECT * FROM orders ORDER BY id").fetchall()
+            original_digest = hashlib.sha256(
+                repr([tuple(row) for row in original_rows]).encode("utf-8")
+            ).hexdigest()
+        if (
+            (restored_count, restored_max_id) != (original_count, original_max_id)
+            or restored_columns != original_columns
+            or restored_digest != original_digest
+        ):
             raise RuntimeError(
-                "Backup differs from live DB: "
-                f"backup orders={restored_count}, max_id={restored_max_id}; "
-                f"live orders={live_count}, max_id={live_max_id}"
+                "Restored copy differs from source backup: "
+                f"restored orders={restored_count}, max_id={restored_max_id}; "
+                f"source orders={original_count}, max_id={original_max_id}; "
+                f"schema_match={restored_columns == original_columns}; "
+                f"data_match={restored_digest == original_digest}"
             )
         return source_backup.name, restored_count, restored_max_id
     finally:
@@ -166,6 +190,7 @@ async def backupcheck_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.effective_message.reply_text("⛔ Эта команда доступна только администратору.")
         return
     try:
+        await asyncio.to_thread(backup_database)
         filename, order_count, max_order_id = await asyncio.to_thread(
             verify_latest_backup_restore
         )
@@ -411,6 +436,18 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order = get_order(order_id)
         if not order:
             await q.answer("Заказ не найден.", show_alert=True)
+            return
+        current_status = order["status"]
+        allowed_next = {
+            "new": {"confirmed", "cancelled"},
+            "confirmed": {"cooking", "cancelled"},
+            "cooking": {"courier", "cancelled"},
+            "courier": {"delivered"},
+            "delivered": set(),
+            "cancelled": set(),
+        }
+        if status not in allowed_next.get(current_status, set()):
+            await q.answer(f"Недопустимый переход: {current_status} → {status}.", show_alert=True)
             return
         set_order_status(order_id, status)
         _, customer_message = ORDER_STATUSES[status]
@@ -679,22 +716,39 @@ async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["name"] = update.message.text.strip()
+    value = (update.message.text or "").strip()
+    if not 2 <= len(value) <= 80:
+        await update.message.reply_text("Укажите имя длиной от 2 до 80 символов.")
+        return NAME
+    context.user_data["name"] = value
     await update.message.reply_text("📱 Напишите номер телефона для связи:")
     return PHONE
 
 async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["phone"] = update.message.text.strip()
+    value = (update.message.text or "").strip()
+    digits = sum(ch.isdigit() for ch in value)
+    if not 7 <= digits <= 15 or len(value) > 30:
+        await update.message.reply_text("Проверьте номер телефона: укажите от 7 до 15 цифр.")
+        return PHONE
+    context.user_data["phone"] = value
     await update.message.reply_text("📍 Напишите полный адрес доставки в Нячанге (район, улица, дом/квартира):")
     return ADDRESS
 
 async def get_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["address"] = update.message.text.strip()
+    value = (update.message.text or "").strip()
+    if not 5 <= len(value) <= 400:
+        await update.message.reply_text("Укажите адрес длиной от 5 до 400 символов.")
+        return ADDRESS
+    context.user_data["address"] = value
     await update.message.reply_text("💬 Комментарий к заказу? Если нет — отправьте «Нет».")
     return COMMENT
 
 async def get_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["comment"] = update.message.text.strip()
+    value = (update.message.text or "").strip()
+    if len(value) > 500:
+        await update.message.reply_text("Комментарий должен быть не длиннее 500 символов.")
+        return COMMENT
+    context.user_data["comment"] = value
     sid = context.user_data["set_id"]
     item = SETS[sid]
     qty = context.user_data["quantity"]
