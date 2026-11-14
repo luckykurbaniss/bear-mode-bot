@@ -407,8 +407,7 @@ async def remove_catalog_prompt(context):
 
 
 async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
-    # Keep every known reminder ID in SQLite, not just the latest one. This is
-    # essential because Telegram messages can outlive a process restart.
+    """Remove legacy standalone reminders; the current reminder lives in the menu message."""
     if generation is not None and generation != context.chat_data.get("shop_hint_generation", 0):
         return
 
@@ -418,54 +417,27 @@ async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
         + get_shop_reminder_ids(chat_id)
     ))
     ids = [mid for mid in ids if mid]
+    failed = []
 
-    if not visible:
-        failed = []
-        for mid in ids:
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=mid)
-                remove_shop_reminder_ids(chat_id, [mid])
-            except Exception:
-                failed.append(mid)
-                add_shop_reminder_id(chat_id, mid)
-                log.warning("Could not delete shop reminder %s; will retry", mid, exc_info=True)
-        context.chat_data["shop_hint_message_ids"] = failed
-        if failed:
-            context.chat_data["shop_hint_message_id"] = failed[-1]
-            context.chat_data["shop_hint_chat_id"] = chat_id
-        else:
-            context.chat_data.pop("shop_hint_message_id", None)
-            context.chat_data.pop("shop_hint_chat_id", None)
-            context.chat_data.pop("shop_hint_message_ids", None)
-        return
+    # The reminder is now part of the main menu message itself. Never send a
+    # standalone reminder: this removes the send/delete race and prevents duplicates.
+    for mid in ids:
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=mid)
+            remove_shop_reminder_ids(chat_id, [mid])
+        except Exception:
+            failed.append(mid)
+            add_shop_reminder_id(chat_id, mid)
+            log.warning("Could not delete legacy shop reminder %s; will retry", mid, exc_info=True)
 
-    if ids:
-        # Keep one reminder visible; remove all other known copies.
-        keep = ids[-1]
-        failed = []
-        for mid in ids[:-1]:
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=mid)
-                remove_shop_reminder_ids(chat_id, [mid])
-            except Exception:
-                failed.append(mid)
-                add_shop_reminder_id(chat_id, mid)
-                log.warning("Could not delete duplicate reminder %s; will retry", mid, exc_info=True)
-        add_shop_reminder_id(chat_id, keep)
-        context.chat_data["shop_hint_message_id"] = keep
+    context.chat_data["shop_hint_message_ids"] = failed
+    if failed:
+        context.chat_data["shop_hint_message_id"] = failed[-1]
         context.chat_data["shop_hint_chat_id"] = chat_id
-        context.chat_data["shop_hint_message_ids"] = failed + [keep]
-        return
-
-    hint = await context.bot.send_message(
-        chat_id=chat_id,
-        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
-    )
-    add_shop_reminder_id(chat_id, hint.message_id)
-    context.chat_data["shop_hint_message_id"] = hint.message_id
-    context.chat_data["shop_hint_chat_id"] = hint.chat_id
-    context.chat_data["shop_hint_message_ids"] = [hint.message_id]
-
+    else:
+        context.chat_data.pop("shop_hint_message_id", None)
+        context.chat_data.pop("shop_hint_chat_id", None)
+        context.chat_data.pop("shop_hint_message_ids", None)
 
 async def remove_shop_hint(context):
     message_id = context.chat_data.pop("shop_hint_message_id", None)
