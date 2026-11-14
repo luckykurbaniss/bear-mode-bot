@@ -295,13 +295,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lock = locks.setdefault(chat_id, asyncio.Lock())
 
     async with lock:
-        if context.chat_data.get("last_start_update_id") == update_id:
-            log.info("Ignoring duplicate /start update: chat_id=%s update_id=%s", chat_id, update_id)
+        now = time.monotonic()
+        last_start_at = context.chat_data.get("last_start_at", 0)
+        if context.chat_data.get("last_start_update_id") == update_id or now - last_start_at < 3.0:
+            log.info("Ignoring repeated /start: chat_id=%s update_id=%s", chat_id, update_id)
             return ConversationHandler.END
 
+        context.chat_data["last_start_at"] = now
+        context.chat_data["last_start_update_id"] = update_id
         log.info("Received /start: chat_id=%s user_id=%s update_id=%s",
                  chat_id, update.effective_user.id if update.effective_user else None, update_id)
-        context.chat_data["last_start_update_id"] = update_id
         context.user_data.clear()
 
         # Remove the previous /start block before creating a fresh one.
@@ -350,6 +353,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["shop_hint_message_id"] = hint.message_id
         context.chat_data["shop_hint_chat_id"] = hint.chat_id
         context.chat_data["shop_hint_message_ids"] = [hint.message_id]
+        context.chat_data["start_message_ids"].append(hint.message_id)
 
         try:
             await remove_catalog_prompt(context)
