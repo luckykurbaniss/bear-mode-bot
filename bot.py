@@ -286,69 +286,83 @@ def catalog_keyboard():
     ] + [[InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]])
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    log.info(
-        "Received /start: chat_id=%s user_id=%s",
-        update.effective_chat.id if update.effective_chat else None,
-        update.effective_user.id if update.effective_user else None,
-    )
-    context.user_data.clear()
-    welcome = (
-        "🐻 *BEAR MODE — еда с характером!*\n\n"
-        "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
-        "Выбирай готовый сет или собери свой заказ!\n\n"
-        "🔥 Готовые сеты — 170.000 ₫"
-    )
-    # Version the launch URL so Telegram opens the latest shop page instead of a cached older build.
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-    shop_keyboard = ReplyKeyboardMarkup(
-        [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
-    # Attach the persistent shop keyboard to the existing welcome message.
-    await update.message.reply_text(
-        welcome,
-        parse_mode="Markdown",
-        reply_markup=shop_keyboard
-    )
-    await update.message.reply_text(
-        "🐼 Выбирай, что будем делать:",
-        parse_mode="Markdown",
-        reply_markup=main_keyboard()
-    )
-    # Send the shop reminder immediately after the main menu. Delete the previous
-    # reminder only afterwards, so a slow delete request cannot delay the new one.
-    old_hint_id = context.chat_data.pop("shop_hint_message_id", None)
-    old_hint_chat_id = context.chat_data.pop("shop_hint_chat_id", None)
-    hint = await context.bot.send_message(
-        chat_id=update.effective_chat.id,
-        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
-    )
-    context.chat_data["shop_hint_message_id"] = hint.message_id
-    context.chat_data["shop_hint_chat_id"] = hint.chat_id
-    if old_hint_id and old_hint_chat_id:
-        try:
-            await context.bot.delete_message(chat_id=old_hint_chat_id, message_id=old_hint_id)
-        except Exception:
-            log.debug("Previous shop hint already removed or cannot be deleted")
+    chat_id = update.effective_chat.id
+    update_id = update.update_id
 
-    # Clean up old temporary messages only after the /start response is delivered.
-    try:
-        await remove_catalog_prompt(context)
-    except Exception:
-        log.exception("Could not clean up old menu messages; /start response was sent")
+    # Serialize /start handling per chat. This prevents two near-simultaneous
+    # updates from leaving two welcome/menu blocks in the conversation.
+    locks = context.application.bot_data.setdefault("start_locks", {})
+    lock = locks.setdefault(chat_id, asyncio.Lock())
 
-    # Menu-button settings are optional: a Telegram API failure must not block /start.
-    try:
-        await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
-        await context.bot.set_chat_menu_button(
-            chat_id=update.effective_chat.id,
-            menu_button=MenuButtonDefault()
+    async with lock:
+        if context.chat_data.get("last_start_update_id") == update_id:
+            log.info("Ignoring duplicate /start update: chat_id=%s update_id=%s", chat_id, update_id)
+            return ConversationHandler.END
+
+        log.info("Received /start: chat_id=%s user_id=%s update_id=%s",
+                 chat_id, update.effective_user.id if update.effective_user else None, update_id)
+        context.chat_data["last_start_update_id"] = update_id
+        context.user_data.clear()
+
+        # Remove the previous /start block before creating a fresh one.
+        old_ids = context.chat_data.pop("start_message_ids", [])
+        old_hint_id = context.chat_data.pop("shop_hint_message_id", None)
+        context.chat_data.pop("shop_hint_chat_id", None)
+        if old_hint_id:
+            old_ids.append(old_hint_id)
+        for message_id in old_ids:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+            except Exception:
+                log.debug("Previous /start message already removed or cannot be deleted")
+
+        welcome = (
+            "🐻 *BEAR MODE — еда с характером!*\\n\\n"
+            "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\\n"
+            "Выбирай готовый сет или собери свой заказ!\\n\\n"
+            "🔥 Готовые сеты — 170.000 ₫"
         )
-    except Exception:
-        log.exception("Could not reset Telegram menu button; /start response was sent")
+        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
+        shop_keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
+            resize_keyboard=True,
+            is_persistent=True,
+        )
 
-    # The shop hint is included in the first welcome message to avoid a delayed extra message.
+        sent_ids = []
+        msg = await update.message.reply_text(
+            welcome, parse_mode="Markdown", reply_markup=shop_keyboard
+        )
+        sent_ids.append(msg.message_id)
+        msg = await update.message.reply_text(
+            "🐼 Выбирай, что будем делать:",
+            parse_mode="Markdown",
+            reply_markup=main_keyboard()
+        )
+        sent_ids.append(msg.message_id)
+
+        hint = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        )
+        sent_ids.append(hint.message_id)
+        context.chat_data["start_message_ids"] = sent_ids
+        context.chat_data["shop_hint_message_id"] = hint.message_id
+        context.chat_data["shop_hint_chat_id"] = hint.chat_id
+
+        try:
+            await remove_catalog_prompt(context)
+        except Exception:
+            log.exception("Could not clean up old menu messages; /start response was sent")
+
+        try:
+            await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
+            await context.bot.set_chat_menu_button(
+                chat_id=chat_id, menu_button=MenuButtonDefault()
+            )
+        except Exception:
+            log.exception("Could not reset Telegram menu button; /start response was sent")
+
     return ConversationHandler.END
 
 async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
