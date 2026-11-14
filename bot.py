@@ -1,19 +1,13 @@
 import asyncio
 import os
 import logging
-import json
 import sqlite3
-import hashlib
-import hmac
-import time
-from urllib.parse import parse_qsl
-from aiohttp import web
 
-from datetime import datetime, date
+from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
+    Update, InlineKeyboardButton, InlineKeyboardMarkup
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -33,9 +27,6 @@ log = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://luckykurbaniss.github.io/bear-mode-bot/").strip()
-API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS; defaults to 80.
-ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 
@@ -212,49 +203,6 @@ def init_db():
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
-        # Keep the legacy table available for safe migration on both old
-        # and brand-new databases.
-        conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminders (
-            chat_id INTEGER PRIMARY KEY,
-            message_id INTEGER NOT NULL
-        )""")
-        conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminder_messages (
-            chat_id INTEGER NOT NULL,
-            message_id INTEGER NOT NULL,
-            PRIMARY KEY(chat_id, message_id)
-        )""")
-        # Migrate the legacy single-ID record without losing it.
-        conn.execute("""INSERT OR IGNORE INTO shop_reminder_messages(chat_id, message_id)
-                        SELECT chat_id, message_id FROM shop_reminders""")
-        conn.execute("DELETE FROM shop_reminders")
-
-
-def get_shop_reminder_ids(chat_id):
-    with db_connect() as conn:
-        rows = conn.execute(
-            "SELECT message_id FROM shop_reminder_messages WHERE chat_id = ? ORDER BY message_id",
-            (chat_id,)
-        ).fetchall()
-        return [row["message_id"] for row in rows]
-
-
-def add_shop_reminder_id(chat_id, message_id):
-    with db_connect() as conn:
-        conn.execute(
-            "INSERT OR IGNORE INTO shop_reminder_messages(chat_id, message_id) VALUES(?, ?)",
-            (chat_id, message_id)
-        )
-
-
-def remove_shop_reminder_ids(chat_id, message_ids=None):
-    with db_connect() as conn:
-        if message_ids is None:
-            conn.execute("DELETE FROM shop_reminder_messages WHERE chat_id = ?", (chat_id,))
-        else:
-            conn.executemany(
-                "DELETE FROM shop_reminder_messages WHERE chat_id = ? AND message_id = ?",
-                [(chat_id, mid) for mid in message_ids]
-            )
 
 
 def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total):
@@ -483,30 +431,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Выбирай готовый сет или собери свой заказ!\n\n"
             "🔥 Готовые сеты — 170.000 ₫"
         )
-        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-        shop_keyboard = ReplyKeyboardMarkup(
-            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-            resize_keyboard=True,
-            is_persistent=True,
-        )
-
         sent_ids = []
         msg = await update.message.reply_text(
-            welcome, parse_mode="Markdown", reply_markup=shop_keyboard
+            welcome, parse_mode="Markdown"
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:\n\n🐾 Выберите действие:",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
         sent_ids.append(msg.message_id)
         context.chat_data["start_message_ids"] = sent_ids
-        # Reconcile reminders through the single visibility controller.
-        # Never clear stored IDs before Telegram confirms deletion; otherwise
-        # a failed delete followed by send_message creates a duplicate.
-        await set_shop_hint_visibility(context, True, chat_id)
-
         # Do not delete previous menu/catalog messages on /start.
         
         # Do not reset Telegram's menu button on every /start.
@@ -521,74 +457,7 @@ async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def remove_catalog_prompt(context):
-    message_id = context.chat_data.pop("catalog_prompt_message_id", None)
-    chat_id = context.chat_data.pop("catalog_prompt_chat_id", None)
-    if message_id and chat_id:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except Exception:
-            log.debug("Catalog prompt already removed or cannot be deleted")
-
-
-async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
-    """Remove legacy standalone reminders; the current reminder lives in the menu message."""
-    if generation is not None and generation != context.chat_data.get("shop_hint_generation", 0):
-        return
-
-    ids = list(dict.fromkeys(
-        list(context.chat_data.get("shop_hint_message_ids", []))
-        + [context.chat_data.get("shop_hint_message_id")]
-        + get_shop_reminder_ids(chat_id)
-    ))
-    ids = [mid for mid in ids if mid]
-    failed = []
-
-    # The reminder is now part of the main menu message itself. Never send a
-    # standalone reminder: this removes the send/delete race and prevents duplicates.
-    for mid in ids:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=mid)
-            remove_shop_reminder_ids(chat_id, [mid])
-        except Exception:
-            failed.append(mid)
-            add_shop_reminder_id(chat_id, mid)
-            log.warning("Could not delete legacy shop reminder %s; will retry", mid, exc_info=True)
-
-    context.chat_data["shop_hint_message_ids"] = failed
-    if failed:
-        context.chat_data["shop_hint_message_id"] = failed[-1]
-        context.chat_data["shop_hint_chat_id"] = chat_id
-    else:
-        context.chat_data.pop("shop_hint_message_id", None)
-        context.chat_data.pop("shop_hint_chat_id", None)
-        context.chat_data.pop("shop_hint_message_ids", None)
-
-async def remove_shop_hint(context):
-    message_id = context.chat_data.pop("shop_hint_message_id", None)
-    chat_id = context.chat_data.pop("shop_hint_chat_id", None)
-    if message_id and chat_id:
-        try:
-            await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except Exception:
-            log.debug("Shop hint already removed or cannot be deleted")
-
-async def show_catalog_prompt(chat_id, context):
-    # Keep exactly one prompt message per chat.
-    await remove_catalog_prompt(context)
-    msg = await context.bot.send_message(
-        chat_id=chat_id,
-        text="Нажми кнопку «Магазин» внизу, чтобы открыть каталог и оформить заказ."
-    )
-    context.chat_data["catalog_prompt_message_id"] = msg.message_id
-    context.chat_data["catalog_prompt_chat_id"] = chat_id
-
-
-
-
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    generation = context.chat_data.get('shop_hint_generation', 0) + 1
-    context.chat_data['shop_hint_generation'] = generation
     return await _menu_callback_locked(update, context, generation)
 
 async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TYPE, generation: int):
@@ -600,11 +469,9 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
-        await remove_catalog_prompt(context)
 
     elif data in ("catalog", "delivery", "contact"):
         if data == "catalog":
@@ -632,17 +499,10 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
                 ]])
             )
 
-        # Hide the reminder whenever the user leaves the main menu.
-        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
-        await remove_catalog_prompt(context)
-
     return ConversationHandler.END
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    # Mark this as the latest navigation before changing the screen.
-    generation = context.chat_data.get("shop_hint_generation", 0) + 1
-    context.chat_data["shop_hint_generation"] = generation
     context.application.create_task(q.answer(), update=update)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
@@ -656,26 +516,18 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("⬅️ К сетам", callback_data="catalog")]
         ])
     )
-    # Selecting a set is a non-home screen: remove the reminder.
-    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    generation = context.chat_data.get("shop_hint_generation", 0) + 1
-    context.chat_data["shop_hint_generation"] = generation
     context.application.create_task(q.answer(), update=update)
-    # Old prompt cleanup must not delay the screen transition.
-    context.application.create_task(remove_catalog_prompt(context), update=update)
     if q.data == "catalog":
         await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
-        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         return SET
     qty = int(q.data.split("_")[1])
     context.user_data["quantity"] = qty
     context.user_data["total"] = qty * PRICE
     await q.edit_message_text(f"Отлично! {qty} порц. — {context.user_data['total']:,} ₫\n\nКак вас зовут?".replace(",", "."))
-    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -785,249 +637,6 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
   
 
 
-async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Validate and forward set and individual-dish orders from the Mini App."""
-    message = update.effective_message
-    if not message or not message.web_app_data:
-        return
-
-    catalog_prices = {
-        "set_1": ("Сет Энергия", PRICE), "set_2": ("Сет Атлантика", PRICE),
-        "set_3": ("Сет Комфорт", PRICE), "set_4": ("Сет Характер", PRICE),
-        "buckwheat": ("Гречка с грибами", 40000),
-        "rice": ("Рис с овощами", 40000),
-        "potato": ("Картофельное пюре", 40000),
-        "chicken_breast": ("Куриная грудка", 70000),
-        "salmon": ("Лосось", 80000),
-        "cutlets": ("Домашние котлеты (2 шт.)", 75000),
-        "chicken_thigh": ("Куриное бедро", 70000),
-        "vegetable_salad": ("Овощной салат", 50000),
-        "freshness_salad": ("Салат «Свежесть»", 50000),
-        "vitamin_salad": ("Витаминный салат", 50000),
-        "omelet": ("Омлет", 15000),
-        "egg": ("Яйцо отварное", 15000),
-        "mors": ("Морс", 15000),
-        "baguette": ("Багет", 15000),
-    }
-    try:
-        order = json.loads(message.web_app_data.data)
-        if order.get("type") != "bear_mode_order":
-            raise ValueError("Unknown order type")
-        customer_name = str(order.get("customer_name", "")).strip()
-        phone = str(order.get("phone", "")).strip()
-        address = str(order.get("address", "")).strip()
-        delivery_date = str(order.get("delivery_date", "")).strip()
-        comment = str(order.get("comment", "")).strip()
-        items = order.get("items", [])
-        if not all([customer_name, phone, address, delivery_date]):
-            raise ValueError("Required customer or delivery fields are missing")
-        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
-            raise ValueError("One or more customer fields are too long")
-        try:
-            requested_date = date.fromisoformat(delivery_date)
-        except ValueError as exc:
-            raise ValueError("Invalid delivery date") from exc
-        if requested_date < datetime.now(VN_TZ).date():
-            raise ValueError("Delivery date cannot be in the past")
-        if not isinstance(items, list) or not 1 <= len(items) <= len(catalog_prices):
-            raise ValueError("The order must contain at least one valid item")
-
-        lines, saved_items, total, seen_ids = [], [], 0, set()
-        for entry in items:
-            if not isinstance(entry, dict):
-                raise ValueError("Invalid order item")
-            item_id = str(entry.get("id", ""))
-            if item_id not in catalog_prices or item_id in seen_ids:
-                raise ValueError("Unknown or repeated catalog item")
-            seen_ids.add(item_id)
-            quantity = int(entry.get("quantity", 0))
-            if quantity < 1 or quantity > 100:
-                raise ValueError("Invalid quantity")
-            item_name, unit_price = catalog_prices[item_id]
-            line_total = quantity * unit_price
-            total += line_total
-            lines.append(f"• {item_name} × {quantity} — {line_total:,} ₫".replace(",", "."))
-            saved_items.append(f"{item_name} × {quantity}")
-
-        if not ADMIN_CHAT_ID:
-            await message.reply_text(
-                "Заказ заполнен, но уведомления владельцу ещё не настроены. "
-                "Пожалуйста, напишите @lucky_ranger."
-            )
-            log.error("Web App order received but ADMIN_CHAT_ID is not configured")
-            return
-
-        user = update.effective_user
-        admin_text = (
-            "🐻 НОВЫЙ ЗАКАЗ САЙТА!\n\n"
-            + "\n".join(lines)
-            + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
-            + f"\n\n👤 Имя: {customer_name}"
-            + f"\n📱 Телефон: {phone}"
-            + f"\n📍 Адрес: {address}"
-            + f"\n📅 Дата доставки: {delivery_date}"
-            + f"\n💬 Комментарий: {comment or 'Нет'}"
-        )
-        if user:
-            admin_text += f"\n\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
-
-        order_id = save_order(
-            user.id if user else None, customer_name, phone, address,
-            delivery_date, "", comment, ", ".join(saved_items), total
-        )
-        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
-        try:
-            await context.bot.send_message(
-                chat_id=int(ADMIN_CHAT_ID),
-                text=admin_text,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
-                ]])
-            )
-        except Exception:
-            delete_order(order_id)
-            raise
-        try:
-            await message.reply_text(
-                "🎉 Заказ отправлен! Спасибо!\n"
-                "Мы скоро свяжемся с вами для подтверждения доставки."
-            )
-        except Exception:
-            # The administrator already received and the database saved the order.
-            # A failed customer acknowledgement must not report a false order failure.
-            log.exception("Order %s was forwarded, but customer acknowledgement failed", order_id)
-    except (ValueError, TypeError, json.JSONDecodeError):
-        log.exception("Invalid order received from website")
-        await message.reply_text(
-            "Не удалось обработать заказ. Проверьте данные и попробуйте ещё раз "
-            "или напишите @lucky_ranger."
-        )
-    except Exception:
-        log.exception("Failed to forward website order")
-        await message.reply_text(
-            "Не удалось отправить заказ автоматически. Пожалуйста, напишите @lucky_ranger."
-        )
-
-
-
-def validate_telegram_init_data(init_data: str):
-    """Validate Telegram Mini App initData and return its authenticated user."""
-    if not init_data or len(init_data) > 10000:
-        raise ValueError("Missing Telegram initData")
-    parsed = dict(parse_qsl(init_data, keep_blank_values=True))
-    received_hash = parsed.pop("hash", "")
-    if not received_hash:
-        raise ValueError("Missing initData hash")
-    check_string = "\n".join(f"{key}={value}" for key, value in sorted(parsed.items()))
-    secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-    calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(calculated_hash, received_hash):
-        raise ValueError("Invalid Telegram initData signature")
-    auth_date = int(parsed.get("auth_date", "0"))
-    if auth_date <= 0 or time.time() - auth_date > 86400 or auth_date - time.time() > 60:
-        raise ValueError("Expired Telegram initData")
-    user = json.loads(parsed.get("user", "{}"))
-    if not user.get("id"):
-        raise ValueError("Telegram user is missing")
-    return user
-
-
-async def health_api(request):
-    return web.json_response({"ok": True, "service": "BEAR MODE order API", "port": API_PORT})
-
-
-async def order_api(request):
-    if request.method == "OPTIONS":
-        return web.Response(status=204, headers={
-            "Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Init-Data",
-            "Vary": "Origin",
-        })
-    headers = {
-        "Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
-        "Vary": "Origin",
-        "Content-Type": "application/json",
-    }
-    if request.headers.get("Origin") != ALLOWED_WEB_ORIGIN:
-        return web.json_response({"ok": False, "error": "Origin not allowed"}, status=403, headers=headers)
-    try:
-        user = validate_telegram_init_data(request.headers.get("X-Telegram-Init-Data", ""))
-        order = await request.json()
-        if order.get("type") != "bear_mode_order":
-            raise ValueError("Unknown order type")
-        customer_name = str(order.get("customer_name", "")).strip()
-        phone = str(order.get("phone", "")).strip()
-        address = str(order.get("address", "")).strip()
-        delivery_date = str(order.get("delivery_date", "")).strip()
-        comment = str(order.get("comment", "")).strip()
-        items = order.get("items", [])
-        if not all([customer_name, phone, address, delivery_date]):
-            raise ValueError("Заполните имя, телефон, адрес и дату доставки.")
-        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
-            raise ValueError("Слишком длинные данные.")
-        requested_date = date.fromisoformat(delivery_date)
-        if requested_date < datetime.now(VN_TZ).date():
-            raise ValueError("Дата доставки не может быть в прошлом.")
-        catalog_prices = {
-            "set_1": ("Сет Энергия", PRICE), "set_2": ("Сет Атлантика", PRICE),
-            "set_3": ("Сет Комфорт", PRICE), "set_4": ("Сет Характер", PRICE),
-            "buckwheat": ("Гречка с грибами", 40000), "rice": ("Рис с овощами", 40000),
-            "potato": ("Картофельное пюре", 40000), "chicken_breast": ("Куриная грудка", 70000),
-            "salmon": ("Лосось", 80000), "cutlets": ("Домашние котлеты (2 шт.)", 75000),
-            "chicken_thigh": ("Куриное бедро", 70000), "vegetable_salad": ("Овощной салат", 50000),
-            "freshness_salad": ("Салат «Свежесть»", 50000), "vitamin_salad": ("Витаминный салат", 50000),
-            "omelet": ("Омлет", 15000), "egg": ("Яйцо отварное", 15000),
-            "mors": ("Морс", 15000), "baguette": ("Багет", 15000),
-        }
-        if not isinstance(items, list) or not 1 <= len(items) <= len(catalog_prices):
-            raise ValueError("Корзина пуста или содержит слишком много позиций.")
-        lines, saved_items, total, seen = [], [], 0, set()
-        for entry in items:
-            item_id = str(entry.get("id", ""))
-            quantity = int(entry.get("quantity", 0))
-            if item_id not in catalog_prices or item_id in seen or not 1 <= quantity <= 100:
-                raise ValueError("Некорректная позиция заказа.")
-            seen.add(item_id)
-            name, price = catalog_prices[item_id]
-            amount = quantity * price
-            total += amount
-            lines.append(f"• {name} × {quantity} — {amount:,} ₫".replace(",", "."))
-            saved_items.append(f"{name} × {quantity}")
-        order_id = save_order(
-            int(user["id"]), customer_name, phone, address, delivery_date,
-            "", comment, ", ".join(saved_items), total
-        )
-        admin_text = (
-            f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
-            + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
-            + f"\n\n👤 Имя: {customer_name}\n📱 Телефон: {phone}"
-            + f"\n📍 Адрес: {address}\n📅 Дата доставки: {delivery_date}"
-            + f"\n💬 Комментарий: {comment or 'Нет'}"
-            + f"\n\nTelegram клиента: {('@' + user['username']) if user.get('username') else user['id']}"
-        )
-        try:
-            await request.app["bot"].send_message(
-                chat_id=int(ADMIN_CHAT_ID), text=admin_text,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
-                ]])
-            )
-            await request.app["bot"].send_message(
-                chat_id=int(user["id"]),
-                text=f"🎉 Заказ №{order_id} принят! Спасибо. Скоро свяжемся для подтверждения доставки."
-            )
-        except Exception:
-            delete_order(order_id)
-            raise
-        return web.json_response({"ok": True, "order_id": order_id}, headers=headers)
-    except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
-        return web.json_response({"ok": False, "error": str(exc)}, status=400, headers=headers)
-    except Exception:
-        log.exception("Mini App order API failed")
-        return web.json_response({"ok": False, "error": "Не удалось отправить заказ. Напишите @lucky_ranger."}, status=500, headers=headers)
-
-
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Оформление остановлено. Чтобы начать заново, нажмите /start.")
@@ -1133,7 +742,6 @@ async def main():
     # Handle order details and delivery controls before the general admin callback.
     app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
-    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
     app.add_handler(conv)
     app.add_handler(
@@ -1162,8 +770,7 @@ async def main():
     )
     print("BEAR MODE: Telegram polling started.", flush=True)
 
-    # Orders are delivered by Telegram Web App sendData; no HTTP order API is started.
-    print("BEAR MODE: startup complete; Telegram bot is waiting for Web App orders.", flush=True)
+    print("BEAR MODE: startup complete; Telegram button ordering is active.", flush=True)
     try:
         await asyncio.Event().wait()
     finally:
