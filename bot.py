@@ -335,7 +335,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐼 Выбирай, что будем делать:\\n\\n"
+            "🐼 Выбирай, что будем делать:\n\n"
             "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — "
             "кнопка «Открыть магазин» внизу чата.",
             parse_mode="Markdown",
@@ -489,7 +489,7 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\\n\\n"
+            "🐼 Выбирай, что будем делать:\n\n"
             "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — "
             "кнопка «Открыть магазин» внизу чата.",
             parse_mode="Markdown", reply_markup=main_keyboard()
