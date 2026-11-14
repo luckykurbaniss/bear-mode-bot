@@ -87,6 +87,30 @@ def init_db():
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminders (
+            chat_id INTEGER PRIMARY KEY,
+            message_id INTEGER NOT NULL
+        )""")
+
+
+def get_shop_reminder_id(chat_id):
+    with db_connect() as conn:
+        row = conn.execute(
+            "SELECT message_id FROM shop_reminders WHERE chat_id = ?", (chat_id,)
+        ).fetchone()
+        return row["message_id"] if row else None
+
+
+def set_shop_reminder_id(chat_id, message_id):
+    with db_connect() as conn:
+        if message_id is None:
+            conn.execute("DELETE FROM shop_reminders WHERE chat_id = ?", (chat_id,))
+        else:
+            conn.execute(
+                """INSERT INTO shop_reminders(chat_id, message_id) VALUES(?, ?)
+                   ON CONFLICT(chat_id) DO UPDATE SET message_id=excluded.message_id""",
+                (chat_id, message_id)
+            )
 
 
 def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total):
@@ -364,49 +388,59 @@ async def remove_catalog_prompt(context):
 
 
 async def set_shop_hint_visibility(context, visible, chat_id, generation=None):
-    # All calls are serialized by the per-chat navigation lock.
+    # Called under the per-chat navigation lock. SQLite preserves the reminder
+    # identity across process restarts and prevents /start from forgetting it.
     if generation is not None and generation != context.chat_data.get('shop_hint_generation', 0):
         return
+
     ids = list(context.chat_data.get('shop_hint_message_ids', []))
-    single = context.chat_data.get('shop_hint_message_id')
-    if single and single not in ids:
-        ids.append(single)
+    for mid in (context.chat_data.get('shop_hint_message_id'), get_shop_reminder_id(chat_id)):
+        if mid and mid not in ids:
+            ids.append(mid)
+
     if not visible:
-        remaining = []
+        failed = []
         for mid in ids:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=mid)
             except Exception:
-                # Keep failed IDs so the next navigation retries deletion and
-                # the bot never sends a replacement while an old one may remain.
-                remaining.append(mid)
-                log.warning('Could not delete shop reminder %s; will retry', mid, exc_info=True)
-        if remaining:
-            context.chat_data['shop_hint_message_id'] = remaining[-1]
-            context.chat_data['shop_hint_chat_id'] = chat_id
-            context.chat_data['shop_hint_message_ids'] = remaining
+                failed.append(mid)
+                log.warning("Could not delete shop reminder %s; will retry", mid, exc_info=True)
+        if failed:
+            set_shop_reminder_id(chat_id, failed[-1])
+            context.chat_data["shop_hint_message_id"] = failed[-1]
+            context.chat_data["shop_hint_chat_id"] = chat_id
+            context.chat_data["shop_hint_message_ids"] = failed
         else:
-            context.chat_data.pop('shop_hint_message_id', None)
-            context.chat_data.pop('shop_hint_chat_id', None)
-            context.chat_data.pop('shop_hint_message_ids', None)
+            set_shop_reminder_id(chat_id, None)
+            context.chat_data.pop("shop_hint_message_id", None)
+            context.chat_data.pop("shop_hint_chat_id", None)
+            context.chat_data.pop("shop_hint_message_ids", None)
         return
+
     if ids:
         keep = ids[-1]
-        remaining = [keep]
+        leftovers = []
         for mid in ids[:-1]:
             try:
                 await context.bot.delete_message(chat_id=chat_id, message_id=mid)
             except Exception:
-                remaining.append(mid)
-                log.warning('Could not delete duplicate reminder %s; will retry', mid, exc_info=True)
-        context.chat_data['shop_hint_message_id'] = keep
-        context.chat_data['shop_hint_chat_id'] = chat_id
-        context.chat_data['shop_hint_message_ids'] = remaining
+                leftovers.append(mid)
+                log.warning("Could not delete duplicate reminder %s; will retry", mid, exc_info=True)
+        set_shop_reminder_id(chat_id, keep)
+        context.chat_data["shop_hint_message_id"] = keep
+        context.chat_data["shop_hint_chat_id"] = chat_id
+        context.chat_data["shop_hint_message_ids"] = leftovers + [keep]
         return
-    hint = await context.bot.send_message(chat_id=chat_id, text='🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.')
-    context.chat_data['shop_hint_message_id'] = hint.message_id
-    context.chat_data['shop_hint_chat_id'] = hint.chat_id
-    context.chat_data['shop_hint_message_ids'] = [hint.message_id]
+
+    hint = await context.bot.send_message(
+        chat_id=chat_id,
+        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+    )
+    set_shop_reminder_id(chat_id, hint.message_id)
+    context.chat_data["shop_hint_message_id"] = hint.message_id
+    context.chat_data["shop_hint_chat_id"] = hint.chat_id
+    context.chat_data["shop_hint_message_ids"] = [hint.message_id]
 
 
 async def remove_shop_hint(context):
