@@ -451,12 +451,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🐼 Выбирай, что будем делать:",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        # Reminder cleanup/creation is secondary; do it after the visible UI update.
-        context.application.create_task(
-            set_shop_hint_visibility(context, True, q.message.chat_id),
-            update=update,
-        )
-        context.application.create_task(remove_catalog_prompt(context), update=update)
+        # Apply reminder state sequentially after the menu is visible.
+        # Awaiting here prevents racing background tasks from leaving stale copies.
+        await set_shop_hint_visibility(context, True, q.message.chat_id)
+        await remove_catalog_prompt(context)
 
     elif data in ("catalog", "delivery", "contact"):
         if data == "catalog":
@@ -484,12 +482,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
 
-        # Delete the hint and stale prompt only after the new menu is visible.
-        context.application.create_task(
-            set_shop_hint_visibility(context, False, q.message.chat_id),
-            update=update,
-        )
-        context.application.create_task(remove_catalog_prompt(context), update=update)
+        # Remove the reminder only after the new section is visible.
+        # Sequential cleanup avoids races when the user quickly changes sections.
+        await set_shop_hint_visibility(context, False, q.message.chat_id)
+        await remove_catalog_prompt(context)
 
     return ConversationHandler.END
 
