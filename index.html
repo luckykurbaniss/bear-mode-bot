@@ -39,7 +39,7 @@ if(tg){
 }
 const PRICE=170000;
 const sets=[
-{id:'1',name:'Сет 1',tag:'Энергия',photo:'assets/set1.jpg',items:[['Гречка с грибами','35'],['Куриная грудка','100'],['Овощной салат','70'],['Яйцо отварное','10'],['Морс','15'],['Багет','15']]},
+{id:'1',name:'Сет 1',tag:'Энергия',photo:'assets/set1-original.png',items:[['Гречка с грибами','35'],['Куриная грудка','100'],['Овощной салат','70'],['Яйцо отварное','10'],['Морс','15'],['Багет','15']]},
 {id:'2',name:'Сет 2',tag:'Атлантика',photo:'assets/set2.jpg',items:[['Рис с овощами','35'],['Филе лосося','100'],['Салат «Свежесть»','70'],['Омлет','15'],['Морс','15'],['Багет','15']]},
 {id:'3',name:'Сет 3',tag:'Комфорт',photo:'assets/set3.jpg',items:[['Картофельное пюре','35'],['Домашняя котлета (2 шт.)','100'],['Витаминный салат','70'],['Омлет','15'],['Морс','15'],['Багет','15']]},
 {id:'4',name:'Сет 4',tag:'Характер',photo:'assets/set4.jpg',items:[['Картофельное пюре','35'],['Куриное бедро','100'],['Салат «Свежесть»','70'],['Яйцо отварное','15'],['Морс','15'],['Багет','15']]}
@@ -121,16 +121,6 @@ $('orderForm').onsubmit=async e=>{
  }
 };
 render();update();
-fetch('assets/set1-photo.b64').then(response=>{
-  if(!response.ok) throw new Error('Set 1 image not found');
-  return response.text();
-}).then(encoded=>{
-  const imageData=encoded.trim();
-  if(imageData.startsWith('/9j/')){
-    sets[0].photo='data:image/jpeg;base64,'+imageData;
-    render();
-  }
-}).catch(error=>console.warn('Could not load replacement Set 1 image:',error));
 
 if('serviceWorker' in navigator && location.protocol==='https:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}),{once:true})}
 
