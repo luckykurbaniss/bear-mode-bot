@@ -334,22 +334,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         context.chat_data["start_message_ids"] = sent_ids
-        # Remove reminders created by older bot versions. The current version
-        # keeps the reminder inside the main-menu text and never sends it alone.
-        old_hint_ids = list(context.chat_data.get("shop_hint_message_ids", []))
-        old_hint_id = context.chat_data.get("shop_hint_message_id")
-        if old_hint_id and old_hint_id not in old_hint_ids:
-            old_hint_ids.append(old_hint_id)
-        context.chat_data.pop("shop_hint_message_id", None)
-        context.chat_data.pop("shop_hint_chat_id", None)
-        context.chat_data.pop("shop_hint_message_ids", None)
-        for old_id in old_hint_ids:
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=old_id)
-            except Exception:
-                log.debug("Legacy shop reminder already removed or cannot be deleted")
-
-        # Keep one separate reminder immediately after the main-menu keyboard.
+        # Reconcile reminders through the single visibility controller.
+        # Never clear stored IDs before Telegram confirms deletion; otherwise
+        # a failed delete followed by send_message creates a duplicate.
         await set_shop_hint_visibility(context, True, chat_id)
 
         # Do not delete previous menu/catalog messages on /start.
