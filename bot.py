@@ -11,6 +11,7 @@ from aiohttp import web
 
 from datetime import datetime, date
 from zoneinfo import ZoneInfo
+from pathlib import Path
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
 )
@@ -72,6 +73,52 @@ def db_connect():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+
+def backup_database():
+    """Create a consistent SQLite backup and retain the latest 14 copies."""
+    source = Path(DB_PATH)
+    if not source.is_file():
+        raise FileNotFoundError(f"Database file not found: {source}")
+
+    backup_dir = Path(os.getenv("DB_BACKUP_DIR", str(source.parent / "backups")))
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(VN_TZ).strftime("%Y%m%d_%H%M%S")
+    destination = backup_dir / f"bear_mode_{stamp}.db"
+    temporary = backup_dir / f".bear_mode_{stamp}.tmp"
+
+    try:
+        with sqlite3.connect(str(source), timeout=30) as src:
+            with sqlite3.connect(str(temporary), timeout=30) as dst:
+                src.backup(dst)
+                check = dst.execute("PRAGMA integrity_check").fetchone()[0]
+                if check != "ok":
+                    raise RuntimeError(f"SQLite backup integrity check failed: {check}")
+        os.replace(temporary, destination)
+
+        backups = sorted(
+            backup_dir.glob("bear_mode_*.db"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        for old_backup in backups[14:]:
+            old_backup.unlink(missing_ok=True)
+
+        log.info("SQLite backup created and verified: %s (%s bytes)", destination.name, destination.stat().st_size)
+        return str(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+async def automatic_backup_loop():
+    """Create one verified backup at startup and then every 24 hours."""
+    while True:
+        try:
+            await asyncio.to_thread(backup_database)
+        except Exception:
+            log.exception("Automatic SQLite backup failed")
+        await asyncio.sleep(24 * 60 * 60)
 
 
 def init_db():
@@ -1002,6 +1049,7 @@ async def main():
 
     init_db()
     init_delivery_db()  # Additive migration; existing orders are preserved.
+    backup_task = asyncio.create_task(automatic_backup_loop())
     # Keep /start independent from ConversationHandler state so it always resets
     # the chat and shows the main menu, even after an interrupted conversation.
     app.add_handler(CommandHandler("start", start))
@@ -1045,6 +1093,8 @@ async def main():
     try:
         await asyncio.Event().wait()
     finally:
+        backup_task.cancel()
+        await asyncio.gather(backup_task, return_exceptions=True)
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
