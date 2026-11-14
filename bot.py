@@ -679,9 +679,9 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         "vegetable_salad": ("Овощной салат", 35000),
         "freshness_salad": ("Салат «Свежесть»", 35000),
         "vitamin_salad": ("Витаминный салат", 35000),
-        "omelet": ("Омлет", 20000),
+        "omelet": ("Омлет", 15000),
         "egg": ("Яйцо отварное", 15000),
-        "mors": ("Морс", 20000),
+        "mors": ("Морс", 15000),
         "baguette": ("Багет", 15000),
     }
     try:
@@ -847,8 +847,8 @@ async def order_api(request):
             "salmon": ("Лосось", 80000), "cutlets": ("Домашние котлеты (2 шт.)", 65000),
             "chicken_thigh": ("Куриное бедро", 60000), "vegetable_salad": ("Овощной салат", 35000),
             "freshness_salad": ("Салат «Свежесть»", 35000), "vitamin_salad": ("Витаминный салат", 35000),
-            "omelet": ("Омлет", 20000), "egg": ("Яйцо отварное", 15000),
-            "mors": ("Морс", 20000), "baguette": ("Багет", 15000),
+            "omelet": ("Омлет", 15000), "egg": ("Яйцо отварное", 15000),
+            "mors": ("Морс", 15000), "baguette": ("Багет", 15000),
         }
         if not isinstance(items, list) or not 1 <= len(items) <= len(catalog_prices):
             raise ValueError("Корзина пуста или содержит слишком много позиций.")
