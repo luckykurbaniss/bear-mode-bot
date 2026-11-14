@@ -998,7 +998,7 @@ async def main():
     app.add_handler(CommandHandler("ping", ping_command))
     app.add_handler(CommandHandler("admin", admin_command))
     # Handle order details and delivery controls before the general admin callback.
-    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery):"))
+    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(conv)
