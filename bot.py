@@ -328,34 +328,16 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐼 Выбирай, что будем делать:",
+            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
         sent_ids.append(msg.message_id)
         context.chat_data["start_message_ids"] = sent_ids
-        # Keep one reminder only, even across repeated /start cycles.
-        # Do not remove previous welcome/menu messages; clean only old reminders.
-        old_hint_ids = list(context.chat_data.get("shop_hint_message_ids", []))
-        old_hint_id = context.chat_data.get("shop_hint_message_id")
-        if old_hint_id and old_hint_id not in old_hint_ids:
-            old_hint_ids.append(old_hint_id)
+        # Reminder is part of the main-menu message; never send it separately.
         context.chat_data.pop("shop_hint_message_id", None)
         context.chat_data.pop("shop_hint_chat_id", None)
         context.chat_data.pop("shop_hint_message_ids", None)
-        for old_id in old_hint_ids:
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=old_id)
-            except Exception:
-                log.debug("Old shop reminder already removed")
-        hint = await context.bot.send_message(
-            chat_id=chat_id,
-            text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
-        )
-        context.chat_data["shop_hint_message_id"] = hint.message_id
-        context.chat_data["shop_hint_chat_id"] = hint.chat_id
-        context.chat_data["shop_hint_message_ids"] = [hint.message_id]
-        context.chat_data["start_message_ids"].append(hint.message_id)
 
         # Do not delete previous menu/catalog messages on /start.
         
@@ -489,11 +471,9 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:",
+            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
             parse_mode="Markdown", reply_markup=main_keyboard()
         )
-        # Restore one reminder after the inline menu buttons.
-        await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     elif data in ("catalog", "delivery", "contact"):
@@ -525,7 +505,6 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
         # Hide the separate reminder after the section is visible.
         # The per-chat navigation lock and generation check prevent races
         # when the user taps several menu buttons quickly.
-        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
 
     return ConversationHandler.END
@@ -549,7 +528,6 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
     )
     # Selecting a set is a non-home screen: hide the shop reminder.
-    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -561,13 +539,11 @@ async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.create_task(remove_catalog_prompt(context), update=update)
     if q.data == "catalog":
         await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
-        await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
         return SET
     qty = int(q.data.split("_")[1])
     context.user_data["quantity"] = qty
     context.user_data["total"] = qty * PRICE
     await q.edit_message_text(f"Отлично! {qty} порц. — {context.user_data['total']:,} ₫\n\nКак вас зовут?".replace(",", "."))
-    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return NAME
 
 async def get_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
