@@ -118,12 +118,19 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if not _get_order(order_id):
             await q.answer("Заказ не найден.", show_alert=True)
             return
-        context.user_data["pending_grab_reference_order_id"] = order_id
         prompt = await q.message.reply_text(
             f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение.\n"
             "Если передумали, просто не отправляйте ответ."
         )
-        context.user_data["pending_grab_reference_prompt_id"] = prompt.message_id
+        # Keep the pending request per chat so callback and reply updates share it.
+        context.chat_data["pending_grab_reference"] = {
+            "order_id": order_id,
+            "prompt_id": prompt.message_id,
+        }
+        log.info(
+            "Grab ID prompt created: order_id=%s chat_id=%s prompt_message_id=%s",
+            order_id, q.message.chat_id, prompt.message_id,
+        )
         await q.answer("Жду Grab ID")
         return
 
@@ -189,26 +196,43 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
 
 async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Save a Grab booking/reference ID sent as a reply to the admin prompt."""
-    if not _admin_only(update) or not update.effective_message:
+    message = update.effective_message
+    if not _admin_only(update) or not message:
+        log.warning("Grab ID reply ignored: unauthorized user or missing message")
         return
-    pending_order_id = context.user_data.get("pending_grab_reference_order_id")
-    prompt_id = context.user_data.get("pending_grab_reference_prompt_id")
-    reply = update.effective_message.reply_to_message
-    if not pending_order_id or not prompt_id or not reply or reply.message_id != prompt_id:
+    pending = context.chat_data.get("pending_grab_reference")
+    if not pending:
+        log.info("Text reply received without a pending Grab ID request: chat_id=%s", message.chat_id)
         return
-    reference = (update.effective_message.text or "").strip()
+    reply = message.reply_to_message
+    if not reply or reply.message_id != pending["prompt_id"]:
+        log.info(
+            "Grab ID reply did not match prompt: chat_id=%s expected_prompt_id=%s actual_reply_id=%s",
+            message.chat_id, pending["prompt_id"], reply.message_id if reply else None,
+        )
+        await message.reply_text("Пожалуйста, отправьте Grab ID именно ответом на последнее сообщение с запросом.")
+        return
+    pending_order_id = pending["order_id"]
+    log.info(
+        "Grab ID reply matched: order_id=%s chat_id=%s prompt_message_id=%s",
+        pending_order_id, message.chat_id, reply.message_id,
+    )
+    reference = (message.text or "").strip()
     if not reference or len(reference) > 120 or any(ord(ch) < 32 for ch in reference):
         await update.effective_message.reply_text("Некорректный Grab ID. Отправьте значение длиной до 120 символов.")
         return
     order = _get_order(pending_order_id)
     if not order:
-        context.user_data.pop("pending_grab_reference_order_id", None)
-        context.user_data.pop("pending_grab_reference_prompt_id", None)
-        await update.effective_message.reply_text("Заказ не найден. Откройте его заново в панели.")
+        context.chat_data.pop("pending_grab_reference", None)
+        await message.reply_text("Заказ не найден. Откройте его заново в панели.")
         return
     with db_connect() as conn:
-        conn.execute("UPDATE orders SET grab_reference = ? WHERE id = ?", (reference, pending_order_id))
-    context.user_data.pop("pending_grab_reference_order_id", None)
-    context.user_data.pop("pending_grab_reference_prompt_id", None)
+        cursor = conn.execute("UPDATE orders SET grab_reference = ? WHERE id = ?", (reference, pending_order_id))
+        if cursor.rowcount != 1:
+            log.error("Grab ID save affected %s rows for order_id=%s", cursor.rowcount, pending_order_id)
+            await message.reply_text("Не удалось сохранить Grab ID. Проверьте заказ и попробуйте ещё раз.")
+            return
+    context.chat_data.pop("pending_grab_reference", None)
     updated = _get_order(pending_order_id)
-    await update.effective_message.reply_text("✅ Grab ID сохранён.\n\n" + _order_text(updated))
+    log.info("Grab ID saved successfully: order_id=%s", pending_order_id)
+    await message.reply_text("✅ Grab ID сохранён.\n\n" + _order_text(updated))
