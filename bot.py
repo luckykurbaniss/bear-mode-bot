@@ -441,8 +441,8 @@ async def show_catalog_prompt(chat_id, context):
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    # Acknowledge immediately to stop Telegram's loading spinner.
-    await q.answer()
+    # Acknowledge without blocking the visible menu update.
+    context.application.create_task(q.answer(), update=update)
     data = q.data
 
     if data == "home":
@@ -495,9 +495,8 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    # Acknowledge the tap immediately; avoid extra Telegram API calls before
-    # editing the current menu message.
-    await q.answer()
+    # Acknowledge in the background so the menu edit starts immediately.
+    context.application.create_task(q.answer(), update=update)
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
@@ -514,8 +513,9 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer()
-    await remove_catalog_prompt(context)
+    context.application.create_task(q.answer(), update=update)
+    # Old prompt cleanup must not delay the screen transition.
+    context.application.create_task(remove_catalog_prompt(context), update=update)
     if q.data == "catalog":
         await q.edit_message_text("🍱 *Выбери свой сет:*", parse_mode="Markdown", reply_markup=catalog_keyboard())
         return SET
