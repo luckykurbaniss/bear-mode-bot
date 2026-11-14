@@ -767,10 +767,15 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         except Exception:
             delete_order(order_id)
             raise
-        await message.reply_text(
-            "🎉 Заказ отправлен! Спасибо!\n"
-            "Мы скоро свяжемся с вами для подтверждения доставки."
-        )
+        try:
+            await message.reply_text(
+                "🎉 Заказ отправлен! Спасибо!\n"
+                "Мы скоро свяжемся с вами для подтверждения доставки."
+            )
+        except Exception:
+            # The administrator already received and the database saved the order.
+            # A failed customer acknowledgement must not report a false order failure.
+            log.exception("Order %s was forwarded, but customer acknowledgement failed", order_id)
     except (ValueError, TypeError, json.JSONDecodeError):
         log.exception("Invalid order received from website")
         await message.reply_text(
