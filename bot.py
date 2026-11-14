@@ -297,8 +297,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with lock:
         now = time.monotonic()
         last_start_at = context.chat_data.get("last_start_at", 0)
-        if context.chat_data.get("last_start_update_id") == update_id or now - last_start_at < 3.0:
-            log.info("Ignoring repeated /start: chat_id=%s update_id=%s", chat_id, update_id)
+        # A second /start while the previous reset is still fresh must not
+        # create another welcome block or move the chat to a second menu.
+        if context.chat_data.get("last_start_update_id") == update_id or now - last_start_at < 15.0:
+            log.info("Ignoring repeated /start within debounce window: chat_id=%s update_id=%s", chat_id, update_id)
             return ConversationHandler.END
 
         context.chat_data["last_start_at"] = now
