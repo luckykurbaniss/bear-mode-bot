@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes
 
 log = logging.getLogger(__name__)
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
-ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "5500196056").strip()
+ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 
 DELIVERY_ACTIONS = {"grab_requested", "picked_up", "payment_received", "delivered"}
 
@@ -157,6 +157,23 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     notice = None
+    # Make status actions idempotent: repeated taps on an old Telegram card
+    # must not send duplicate customer notifications.
+    if parts[1] == "set" and order["status"] == action:
+        await q.answer("Этот статус уже установлен.")
+        return
+    if parts[1] == "delivery":
+        current_grab = order["grab_status"] or "not_requested"
+        already_applied = (
+            (action == "grab_requested" and current_grab == "requested")
+            or (action == "picked_up" and current_grab == "picked_up" and order["status"] == "courier")
+            or (action == "payment_received" and order["payment_status"] == "received")
+            or (action == "delivered" and current_grab == "delivered" and order["status"] == "delivered")
+        )
+        if already_applied:
+            await q.answer("Это действие уже выполнено.")
+            return
+
     if parts[1] == "set":
         status_messages = {
             "new": "Мы получили ваш заказ и скоро свяжемся с вами для подтверждения.",
