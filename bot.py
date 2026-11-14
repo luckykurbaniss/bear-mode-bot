@@ -383,32 +383,38 @@ async def remove_catalog_prompt(context):
 
 
 async def set_shop_hint_visibility(context, visible, chat_id):
-    message_id = context.chat_data.get("shop_hint_message_id")
-    saved_chat_id = context.chat_data.get("shop_hint_chat_id")
+    # Serialize visibility changes so rapid taps or overlapping callbacks
+    # cannot send the same reminder twice.
+    locks = context.application.bot_data.setdefault("shop_hint_locks", {})
+    lock = locks.setdefault(chat_id, asyncio.Lock())
 
-    if not visible:
-        if message_id and saved_chat_id:
-            try:
-                await context.bot.delete_message(
-                    chat_id=saved_chat_id,
-                    message_id=message_id
-                )
-            except Exception:
-                log.debug("Shop hint already removed or cannot be deleted")
-        context.chat_data.pop("shop_hint_message_id", None)
-        context.chat_data.pop("shop_hint_chat_id", None)
-        return
+    async with lock:
+        message_id = context.chat_data.get("shop_hint_message_id")
+        saved_chat_id = context.chat_data.get("shop_hint_chat_id")
 
-    # Restore only the temporary hint. The separate Web App keyboard message
-    # remains untouched, so the bottom button stays available in every section.
-    if message_id and saved_chat_id:
-        return
-    hint = await context.bot.send_message(
-        chat_id=chat_id,
-        text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
-    )
-    context.chat_data["shop_hint_message_id"] = hint.message_id
-    context.chat_data["shop_hint_chat_id"] = hint.chat_id
+        if not visible:
+            if message_id and saved_chat_id:
+                try:
+                    await context.bot.delete_message(
+                        chat_id=saved_chat_id,
+                        message_id=message_id
+                    )
+                except Exception:
+                    log.debug("Shop hint already removed or cannot be deleted")
+            context.chat_data.pop("shop_hint_message_id", None)
+            context.chat_data.pop("shop_hint_chat_id", None)
+            return
+
+        # Keep the existing reminder instead of sending another copy.
+        if message_id and saved_chat_id == chat_id:
+            return
+
+        hint = await context.bot.send_message(
+            chat_id=chat_id,
+            text="🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+        )
+        context.chat_data["shop_hint_message_id"] = hint.message_id
+        context.chat_data["shop_hint_chat_id"] = hint.chat_id
 
 
 async def remove_shop_hint(context):
@@ -482,7 +488,7 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]])
             )
 
-        await set_shop_hint_visibility(context, False, q.message.chat_id)
+
 
     return ConversationHandler.END
 
