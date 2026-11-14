@@ -121,6 +121,16 @@ $('orderForm').onsubmit=async e=>{
  }
 };
 render();update();
+fetch('assets/set1-photo.b64').then(response=>{
+  if(!response.ok) throw new Error('Set 1 image not found');
+  return response.text();
+}).then(encoded=>{
+  const imageData=encoded.trim();
+  if(imageData.startsWith('/9j/')){
+    sets[0].photo='data:image/jpeg;base64,'+imageData;
+    render();
+  }
+}).catch(error=>console.warn('Could not load replacement Set 1 image:',error));
 
 if('serviceWorker' in navigator && location.protocol==='https:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}),{once:true})}
 
