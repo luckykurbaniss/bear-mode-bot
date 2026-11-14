@@ -464,12 +464,29 @@ async def show_catalog_prompt(chat_id, context):
 
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
+    chat_id = q.message.chat_id
+
+    # Assign a sequence number before waiting for the per-chat lock.
+    # A fast later tap supersedes any older callback still waiting.
+    generation = context.chat_data.get("shop_hint_generation", 0) + 1
+    context.chat_data["shop_hint_generation"] = generation
+
+    locks = context.application.bot_data.setdefault("menu_navigation_locks", {})
+    lock = locks.setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        if generation != context.chat_data.get("shop_hint_generation", 0):
+            try:
+                await q.answer()
+            except Exception:
+                pass
+            return ConversationHandler.END
+        return await _menu_callback_locked(update, context, generation)
+
+async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TYPE, generation: int):
+    q = update.callback_query
     # Acknowledge without blocking the visible menu update.
     context.application.create_task(q.answer(), update=update)
     data = q.data
-    # Each navigation tap supersedes earlier pending reminder operations.
-    generation = context.chat_data.get("shop_hint_generation", 0) + 1
-    context.chat_data["shop_hint_generation"] = generation
 
     if data == "home":
         context.user_data.clear()
