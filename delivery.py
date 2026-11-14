@@ -125,6 +125,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Некорректное действие.", show_alert=True)
         return
     order_id, action = int(parts[2]), parts[3]
+    if parts[1] == "delivery" and action not in DELIVERY_ACTIONS:
+        await q.answer("Неизвестное действие.", show_alert=True)
+        return
     order = _get_order(order_id)
     if not order:
         await q.answer("Заказ не найден.", show_alert=True)
