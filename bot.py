@@ -295,15 +295,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lock = locks.setdefault(chat_id, asyncio.Lock())
 
     async with lock:
-        now = time.monotonic()
-        last_start_at = context.chat_data.get("last_start_at", 0)
-        # A second /start while the previous reset is still fresh must not
-        # create another welcome block or move the chat to a second menu.
-        if context.chat_data.get("last_start_update_id") == update_id or now - last_start_at < 15.0:
-            log.info("Ignoring repeated /start within debounce window: chat_id=%s update_id=%s", chat_id, update_id)
+        # Every distinct /start update starts a fresh cycle immediately.
+        # The per-chat lock serializes resets; only the same update is ignored.
+        if context.chat_data.get("last_start_update_id") == update_id:
+            log.info("Ignoring duplicate delivery of the same /start update: chat_id=%s update_id=%s", chat_id, update_id)
             return ConversationHandler.END
 
-        context.chat_data["last_start_at"] = now
         context.chat_data["last_start_update_id"] = update_id
         log.info("Received /start: chat_id=%s user_id=%s update_id=%s",
                  chat_id, update.effective_user.id if update.effective_user else None, update_id)
@@ -364,13 +361,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             log.exception("Could not clean up old menu messages; /start response was sent")
 
-        try:
-            await context.bot.set_chat_menu_button(menu_button=MenuButtonDefault())
-            await context.bot.set_chat_menu_button(
-                chat_id=chat_id, menu_button=MenuButtonDefault()
-            )
-        except Exception:
-            log.exception("Could not reset Telegram menu button; /start response was sent")
+        # Do not reset Telegram's menu button on every /start.
+        # It is persistent and does not need another network round trip.
 
     return ConversationHandler.END
 
