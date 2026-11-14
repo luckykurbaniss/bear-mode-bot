@@ -556,8 +556,26 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    # Acknowledge in the background so the menu edit starts immediately.
-    context.application.create_task(q.answer(), update=update)
+    chat_id = q.message.chat_id
+    # Use the same per-chat navigation lock as the main menu. A later tap
+    # supersedes an older callback that is still waiting to run.
+    generation = context.chat_data.get("shop_hint_generation", 0) + 1
+    context.chat_data["shop_hint_generation"] = generation
+    locks = context.application.bot_data.setdefault("menu_navigation_locks", {})
+    lock = locks.setdefault(chat_id, asyncio.Lock())
+    async with lock:
+        if generation != context.chat_data.get("shop_hint_generation", 0):
+            try:
+                await q.answer()
+            except Exception:
+                pass
+            return ConversationHandler.END
+        return await _choose_set_locked(update, context, generation)
+
+
+async def _choose_set_locked(update: Update, context: ContextTypes.DEFAULT_TYPE, generation: int):
+    q = update.callback_query
+    await q.answer()
     set_id = q.data.split("_", 1)[1]
     item = SETS[set_id]
     context.user_data.clear()
@@ -571,7 +589,7 @@ async def choose_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
     )
     # The reminder must also be hidden when entering an individual set/order flow.
-    await set_shop_hint_visibility(context, False, q.message.chat_id)
+    await set_shop_hint_visibility(context, False, q.message.chat_id, generation)
     return QUANTITY
 
 async def quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
