@@ -1,6 +1,7 @@
 import asyncio
 import os
 import logging
+import re
 import json
 import sqlite3
 import hashlib
@@ -1244,6 +1245,7 @@ async def main():
     init_delivery_db()  # Additive migration; existing orders are preserved.
     backup_task = asyncio.create_task(automatic_backup_loop())
     api = web.Application(client_max_size=64 * 1024)
+    api["bot"] = app.bot
     api.router.add_get("/health", health_api)
     api.router.add_post("/api/orders", order_api)
     api.router.add_options("/api/orders", order_api)
