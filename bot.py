@@ -521,7 +521,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Выбирай готовый сет или собери свой заказ!\n\n"
             "🔥 Готовые сеты — 170.000 ₫"
         )
-        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
+        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261115-1"
         shop_keyboard = ReplyKeyboardMarkup(
             [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
             resize_keyboard=True,
