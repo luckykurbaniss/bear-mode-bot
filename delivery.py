@@ -154,8 +154,7 @@ def _order_keyboard(order):
     order_id = order["id"]
     rows = []
     status_buttons = [
-        ("Новый", "new"), ("Подтверждён", "confirmed"),
-        ("Готовится", "cooking"), ("Отменён", "cancelled"),
+        ("Готовится", "cooking"),
     ]
     # Show only available next statuses. The current status is omitted,
     # so an old status can never keep a stale checkmark on the card.
@@ -202,6 +201,9 @@ def _order_edit_keyboard(order_id):
         for label, field in fields
     ]
     rows.append([
+        InlineKeyboardButton("❌ Отменить заказ", callback_data=f"adm:edit:{order_id}:cancelled")
+    ])
+    rows.append([
         InlineKeyboardButton("⬅️ Назад к заказу", callback_data=f"adm:order:{order_id}")
     ])
     return InlineKeyboardMarkup(rows)
@@ -236,6 +238,24 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer()
             return
         field = parts[3]
+        if field == "cancelled":
+            _set_value(order_id, "status", "cancelled")
+            customer_chat_id = order["customer_chat_id"] if "customer_chat_id" in order.keys() else None
+            if customer_chat_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=customer_chat_id,
+                        text="❌ К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+                    )
+                except Exception:
+                    log.exception("Could not notify customer about cancelled order")
+            order = _get_order(order_id)
+            await q.edit_message_text(
+                _order_text(order),
+                reply_markup=_order_keyboard(order),
+            )
+            await q.answer("Заказ отменён")
+            return
         prompts = {
             "customer_name": ("имя клиента", "Введите новое имя (2–80 символов)."),
             "phone": ("телефон", "Введите новый телефон (7–30 символов)."),
