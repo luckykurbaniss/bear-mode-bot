@@ -490,7 +490,7 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
             try:
                 await context.bot.send_message(
                     chat_id=customer_chat_id,
-                    text=f"🛵 Отследить доставку вашего заказа BEAR MODE №{tracking_order_id} можно по ссылке ниже.",
+                    text="🛵 Отследить доставку вашего заказа можно по ссылке ниже.",
                     reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Отследить курьера Grab", url=tracking_url)]]),
                 )
             except Exception:
