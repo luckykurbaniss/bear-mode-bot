@@ -111,6 +111,48 @@ def _target_keyboard():
     ] + [[InlineKeyboardButton("✖️ Закрыть", callback_data="support:close")]])
 
 
+def _customer_order_confirmation_keyboard(order_id):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Подтверждаю", callback_data=f"customer_order:confirmed:{order_id}")],
+        [InlineKeyboardButton("❌ Отменить", callback_data=f"customer_order:cancelled:{order_id}")],
+    ])
+
+
+async def customer_order_confirmation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    parts = q.data.split(":")
+    if len(parts) != 3 or parts[1] not in {"confirmed", "cancelled"}:
+        await q.answer("Некорректное действие.", show_alert=True)
+        return
+    order_id = int(parts[2])
+    new_status = parts[1]
+    with _db() as conn:
+        order = conn.execute("SELECT id, customer_chat_id, status FROM orders WHERE id = ?", (order_id,)).fetchone()
+        if not order or int(order["customer_chat_id"] or 0) != int(update.effective_chat.id):
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        if order["status"] != "new":
+            await q.answer("По этому заказу уже принято решение.", show_alert=True)
+            return
+        conn.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
+    if new_status == "confirmed":
+        customer_text = "✅ Спасибо! Вы подтвердили заказ. Мы начинаем его обработку."
+        admin_text = f"✅ Клиент подтвердил заказ BEAR MODE №{order_id}."
+    else:
+        customer_text = "❌ Заказ отменён. Если это ошибка, напишите нам @lucky_ranger."
+        admin_text = f"❌ Клиент отменил заказ BEAR MODE №{order_id}."
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        log.exception("Could not remove customer order confirmation buttons")
+    await q.message.reply_text(customer_text)
+    if ADMIN_CHAT_ID:
+        try:
+            await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=admin_text)
+        except Exception:
+            log.exception("Could not notify admin about customer order decision")
+    await q.answer("Готово")
+
 def _preview_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📨 Отправить клиенту", callback_data="support:send")],
@@ -212,6 +254,7 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["support_draft"] = {
             "chat_id": target["chat_id"],
             "order_id": target.get("order_id", 0),
+            "template_id": template_id,
             "text": draft,
         }
         preview = await q.message.reply_text(
@@ -248,6 +291,7 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(
                 chat_id=int(draft["chat_id"]),
                 text=draft["text"].strip(),
+                reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") == "welcome_confirm" else None),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as exc:
@@ -327,6 +371,7 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
         sent = await context.bot.send_message(
             chat_id=int(draft["chat_id"]),
             text=new_text,
+            reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") == "welcome_confirm" else None),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception as exc:
