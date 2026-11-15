@@ -195,6 +195,7 @@ def _format_template(template_id, order):
             "чтобы всё было правильно! 😊\n\n"
             f"📍 Адрес: {address}\n"
             f"🍱 Заказ: {items}\n"
+            f"🧾 Номер заказа: №{order['id']}\n"
             f"💰 Итого к оплате: {total}\n"
             
             + (
