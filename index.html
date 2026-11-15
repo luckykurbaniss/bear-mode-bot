@@ -148,7 +148,21 @@ $('toast').addEventListener('touchend',e=>{const p=e.changedTouches[0];if(Math.a
 $('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
 let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('date').min=local;$('date').value=local;
 let orderSubmitting=false;
-$('orderForm').onsubmit=e=>{
+const ORDER_API_URL='https://bear-mode-bot-production.up.railway.app/api/orders';
+const PENDING_SUBMISSION_KEY='bear_mode_pending_submission_v1';
+function makeSubmissionId(){
+ if(window.crypto?.randomUUID)return window.crypto.randomUUID().replaceAll('-','');
+ return 'bm_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,14);
+}
+function clearCartAfterServerConfirmation(){
+ for(const key of Object.keys(cart))delete cart[key];
+ try{
+  localStorage.removeItem(CART_STORAGE_KEY);
+  localStorage.removeItem(PENDING_SUBMISSION_KEY);
+ }catch(err){console.warn('Could not clear confirmed basket:',err)}
+ update();
+}
+$('orderForm').onsubmit=async e=>{
  e.preventDefault();
  if(orderSubmitting)return;
  if(!Object.keys(cart).length)return toast('Корзина пуста');
@@ -156,30 +170,50 @@ $('orderForm').onsubmit=e=>{
  if(!form.reportValidity())return;
  const submitButton=form.querySelector('button[type="submit"]');
  if(submitButton.disabled)return;
- if(!tg||typeof tg.sendData!=='function'){
+ const initData=tg?.initData;
+ if(!initData){
   toast('Открой магазин кнопкой «Открыть магазин» в чате с ботом.');
   return;
  }
- const order={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim(),payment_method:document.querySelector('input[name="payment_method"]:checked')?.value||'cash',payment_confirmed:qrPaymentConfirmed};
+ const payload={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim(),payment_method:document.querySelector('input[name="payment_method"]:checked')?.value||'cash',payment_confirmed:qrPaymentConfirmed};
+ const payloadFingerprint=JSON.stringify(payload);
+ let pending=null;
+ try{pending=JSON.parse(localStorage.getItem(PENDING_SUBMISSION_KEY)||'null')}catch(_){}
+ if(!pending||pending.fingerprint!==payloadFingerprint){
+  pending={fingerprint:payloadFingerprint,submission_id:makeSubmissionId()};
+  try{localStorage.setItem(PENDING_SUBMISSION_KEY,JSON.stringify(pending))}catch(err){console.warn('Could not persist submission id:',err)}
+ }
+ payload.submission_id=pending.submission_id;
  orderSubmitting=true;
  submitButton.disabled=true;
- submitButton.textContent='Передаём заказ в Telegram…';
+ submitButton.textContent='Отправляем заказ…';
  try{
-  // Telegram sendData automatically closes a reply-keyboard Mini App after dispatching web_app_data.
-  // Do not call tg.close() manually: closing immediately can race the native data hand-off.
-  tg.sendData(JSON.stringify(order));
-  // Clear the persisted basket only after Telegram accepts the sendData call.
-  for(const key of Object.keys(cart))delete cart[key];
-  try{localStorage.removeItem(CART_STORAGE_KEY)}catch(err){console.warn("Could not clear saved cart:",err)}
-  update();
-  submitButton.textContent='Заказ передан в Telegram ✓';
-  toast('Передаём заказ боту. Подожди подтверждения в чате.');
+  const response=await fetch(ORDER_API_URL,{
+   method:'POST',
+   headers:{'Content-Type':'application/json','X-Telegram-Init-Data':initData},
+   body:JSON.stringify(payload),
+   credentials:'omit',
+   cache:'no-store'
+  });
+  let result={};
+  try{result=await response.json()}catch(_){}
+  if(!response.ok||result.ok!==true){
+   throw new Error(result.error||'Сервер не подтвердил получение заказа.');
+  }
+  clearCartAfterServerConfirmation();
+  $('overlay').classList.remove('show');
+  orderSubmitting=false;
+  submitButton.disabled=false;
+  submitButton.textContent='🐻 Отправить заказ';
+  toast('Заказ №'+result.order_id+' принят! Мы скоро свяжемся с вами ❤️');
+  if(tg?.HapticFeedback?.notificationOccurred)tg.HapticFeedback.notificationOccurred('success');
  }catch(err){
   console.error('Order submission failed:',err);
   orderSubmitting=false;
   submitButton.disabled=false;
   submitButton.textContent='🐻 Отправить заказ';
-  toast(err.message||'Не удалось отправить заказ. Попробуй ещё раз.');
+  toast(err.message||'Не удалось отправить заказ. Корзина сохранена — попробуйте ещё раз.');
+  if(tg?.HapticFeedback?.notificationOccurred)tg.HapticFeedback.notificationOccurred('error');
  }
 };
 render();update();
