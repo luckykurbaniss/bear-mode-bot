@@ -241,9 +241,6 @@ def _order_edit_keyboard(order_id):
         for label, field in fields
     ]
     rows.append([
-        InlineKeyboardButton("❌ Отменить заказ", callback_data=f"adm:edit:{order_id}:cancelled")
-    ])
-    rows.append([
         InlineKeyboardButton("⬅️ Назад к заказу", callback_data=f"adm:order:{order_id}")
     ])
     return InlineKeyboardMarkup(rows)
