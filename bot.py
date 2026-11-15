@@ -209,9 +209,16 @@ def init_db():
             comment TEXT,
             items_text TEXT NOT NULL,
             total INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT 'new'
+            status TEXT NOT NULL DEFAULT 'new',
+            submission_id TEXT,
+            admin_notified INTEGER NOT NULL DEFAULT 0
         )""")
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
+        if "submission_id" not in columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN submission_id TEXT")
+        if "admin_notified" not in columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN admin_notified INTEGER NOT NULL DEFAULT 0")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_submission_id ON orders(submission_id) WHERE submission_id IS NOT NULL")
         # One-time rollback of the former fixed delivery charge from existing orders.
         # New orders no longer store or add a delivery fee.
         if "delivery_fee" in columns:
@@ -264,17 +271,17 @@ def remove_shop_reminder_ids(chat_id, message_ids=None):
             )
 
 
-def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method="cash"):
+def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method="cash", submission_id=None):
     if payment_method not in {"cash", "qr"}:
         raise ValueError("Invalid payment method")
     with db_connect() as conn:
         cur = conn.execute(
             """INSERT INTO orders
-            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)""",
+            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method, submission_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)""",
             (datetime.now(VN_TZ).isoformat(timespec="seconds"), customer_chat_id,
              customer_name, phone, address, delivery_date, delivery_time, comment, items_text,
-             int(total), payment_method)
+             int(total), payment_method, submission_id)
         )
         return cur.lastrowid
 
@@ -320,13 +327,10 @@ def delete_order(order_id):
 
 
 def clear_all_orders():
-    """Delete all orders and reset numbering so the next order starts at №1."""
+    """Delete order records while preserving AUTOINCREMENT numbering."""
     with db_connect() as conn:
         count = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
         conn.execute("DELETE FROM orders")
-        # AUTOINCREMENT stores its next ID in sqlite_sequence.
-        # Reset only the orders counter; other tables and settings stay untouched.
-        conn.execute("DELETE FROM sqlite_sequence WHERE name = 'orders'")
         return count
 
 
@@ -1016,6 +1020,9 @@ async def order_api(request):
         address = str(order.get("address", "")).strip()
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
+        submission_id = str(order.get("submission_id", "")).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", submission_id):
+            raise ValueError("Некорректный идентификатор отправки заказа.")
         payment_method = str(order.get("payment_method", "cash")).strip()
         if payment_method not in {"cash", "qr"}:
             raise ValueError("Некорректный способ оплаты.")
@@ -1063,11 +1070,33 @@ async def order_api(request):
             total += amount
             lines.append(f"• {name} × {quantity} — {amount:,} ₫".replace(",", "."))
             saved_items.append(f"{name} × {quantity}")
-        order_id = save_order(
-            int(user["id"]), customer_name, phone, address, delivery_date,
-            "", comment, ", ".join(saved_items), total,
-            payment_method=payment_method
-        )
+        with db_connect() as conn:
+            existing = conn.execute(
+                "SELECT id, admin_notified FROM orders WHERE submission_id = ?",
+                (submission_id,),
+            ).fetchone()
+        if existing:
+            order_id = existing["id"]
+            if existing["admin_notified"]:
+                return web.json_response({"ok": True, "order_id": order_id, "duplicate": True}, headers=headers)
+        else:
+            try:
+                order_id = save_order(
+                    int(user["id"]), customer_name, phone, address, delivery_date,
+                    "", comment, ", ".join(saved_items), total,
+                    payment_method=payment_method, submission_id=submission_id
+                )
+            except sqlite3.IntegrityError:
+                with db_connect() as conn:
+                    existing = conn.execute(
+                        "SELECT id, admin_notified FROM orders WHERE submission_id = ?",
+                        (submission_id,),
+                    ).fetchone()
+                if not existing:
+                    raise
+                order_id = existing["id"]
+                if existing["admin_notified"]:
+                    return web.json_response({"ok": True, "order_id": order_id, "duplicate": True}, headers=headers)
         admin_text = (
             f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
             + f"\n💰 ИТОГО К ОПЛАТЕ: {total:,} ₫".replace(",", ".")
@@ -1085,6 +1114,8 @@ async def order_api(request):
                     InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
                 ]])
             )
+            with db_connect() as conn:
+                conn.execute("UPDATE orders SET admin_notified = 1 WHERE id = ?", (order_id,))
         except Exception:
             delete_order(order_id)
             raise
@@ -1196,6 +1227,15 @@ async def main():
     init_db()
     init_delivery_db()  # Additive migration; existing orders are preserved.
     backup_task = asyncio.create_task(automatic_backup_loop())
+    api = web.Application(client_max_size=64 * 1024)
+    api.router.add_get("/health", health_api)
+    api.router.add_post("/api/orders", order_api)
+    api.router.add_options("/api/orders", order_api)
+    api_runner = web.AppRunner(api, access_log=None)
+    await api_runner.setup()
+    api_site = web.TCPSite(api_runner, "0.0.0.0", API_PORT)
+    await api_site.start()
+    log.info("BEAR MODE order API listening on 0.0.0.0:%s", API_PORT)
     # Keep /start independent from ConversationHandler state so it always resets
     # the chat and shows the main menu, even after an interrupted conversation.
     app.add_handler(CommandHandler("start", start))
@@ -1241,6 +1281,7 @@ async def main():
     finally:
         backup_task.cancel()
         await asyncio.gather(backup_task, return_exceptions=True)
+        await api_runner.cleanup()
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
