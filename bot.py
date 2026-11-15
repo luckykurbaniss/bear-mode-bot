@@ -328,10 +328,12 @@ def delete_order(order_id):
 
 
 def clear_all_orders():
-    """Delete order records while preserving AUTOINCREMENT numbering."""
+    """Delete all orders and reset the next order number to 1."""
     with db_connect() as conn:
         count = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
         conn.execute("DELETE FROM orders")
+        # Reset SQLite AUTOINCREMENT so the next new order starts at №1.
+        conn.execute("DELETE FROM sqlite_sequence WHERE name = 'orders'")
         return count
 
 
@@ -413,7 +415,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif parts[1] == "clear" and len(parts) > 2 and parts[2] == "confirm":
         count = clear_all_orders()
         await q.edit_message_text(
-            f"✅ Список заказов очищен. Удалено записей: {count}. Нумерация новых заказов продолжится без сброса.",
+            f"✅ Список заказов очищен. Удалено записей: {count}. Нумерация сброшена — следующий заказ будет №1.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")]])
         )
         await q.answer("Заказы удалены")
