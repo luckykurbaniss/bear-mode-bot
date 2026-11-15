@@ -72,7 +72,7 @@ TEMPLATES = {
 CATEGORIES = {
     "start": ("👋 Приветствие и подтверждение", ["greeting", "confirm_order", "closing"]),
     "menu": ("🍱 Меню и цены", ["prices", "total"]),
-    "delivery": ("🚚 Доставка", ["delivery", "address", "time", "delay"]),
+    "delivery": ("🚚 Доставка", ["delivery", "delay"]),
     "payment": ("💵 Оплата", ["payment"]),
     "food": ("🥗 Блюда и состав", ["ingredients", "allergy"]),
     "order": ("🧾 Изменение заказа", ["add", "change", "remove", "cancel", "total"]),
