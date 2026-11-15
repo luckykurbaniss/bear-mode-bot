@@ -81,9 +81,9 @@ def _set_value(order_id, column, value):
 
 def _order_text(order):
     order_status = {
-        "new": "🆕 Новый", "confirmed": "✅ Подтверждён",
-        "cooking": "👨‍🍳 Готовится", "courier": "🛵 Передан курьеру",
-        "delivered": "🎉 Доставлен", "cancelled": "❌ Отменён",
+        "new": "✅ Новый", "confirmed": "✅ Подтверждён",
+        "cooking": "✅ Готовится", "courier": "✅ Передан курьеру",
+        "delivered": "✅ Доставлен", "cancelled": "✅ Отменён",
     }.get(order["status"], order["status"])
     grab_status = {
         "not_requested": "Не вызван", "requested": "Вызван вручную",
