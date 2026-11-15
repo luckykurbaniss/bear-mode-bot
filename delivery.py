@@ -201,7 +201,7 @@ def _order_keyboard(order):
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
     status_buttons = [
         ("✅ Подтверждён" if confirmed_stage_reached else "🤝 Подтвердить", "confirmed"),
-        ("✅ 🍳 Готовится" if cooking_stage_reached else "🍳 Готовится", "cooking"),
+        ("✅ Готовится" if cooking_stage_reached else "🍳 Готовится", "cooking"),
     ]
     for start in range(0, len(status_buttons), 1):
         label, status = status_buttons[start]
