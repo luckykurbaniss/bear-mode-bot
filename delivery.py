@@ -95,17 +95,19 @@ def _order_keyboard(order):
     order_id = order["id"]
     rows = []
     status_buttons = [
-        ("🆕 Новый", "new"), ("✅ Подтверждён", "confirmed"),
-        ("👨‍🍳 Готовится", "cooking"), ("❌ Отменён", "cancelled"),
+        ("🆕 Новый", "new"), ("Подтверждён", "confirmed"),
+        ("Готовится", "cooking"), ("Отменён", "cancelled"),
     ]
     for start in range(0, len(status_buttons), 2):
         row = [
-            InlineKeyboardButton(label, callback_data=f"adm:set:{order_id}:{status}")
+            InlineKeyboardButton(
+                ("✅ " if status == order["status"] else label + " ")
+                if status == order["status"] else label,
+                callback_data=f"adm:set:{order_id}:{status}",
+            )
             for label, status in status_buttons[start:start + 2]
-            if status != order["status"]
         ]
-        if row:
-            rows.append(row)
+        rows.append(row)
     rows.extend([
         [InlineKeyboardButton(("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
