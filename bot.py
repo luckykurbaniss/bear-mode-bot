@@ -59,6 +59,7 @@ SETS = {
     },
 }
 PRICE = 170_000
+DELIVERY_FEE = 30_000
 
 ORDER_STATUSES = {
     "new": ("🆕 Новый", "Мы получили ваш заказ и скоро свяжемся с вами для подтверждения."),
@@ -211,6 +212,9 @@ def init_db():
             total INTEGER NOT NULL,
             status TEXT NOT NULL DEFAULT 'new'
         )""")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
+        if "delivery_fee" not in columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN delivery_fee INTEGER NOT NULL DEFAULT 0")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
         # Keep the legacy table available for safe migration on both old
@@ -264,10 +268,11 @@ def save_order(customer_chat_id, customer_name, phone, address, delivery_date, d
     with db_connect() as conn:
         cur = conn.execute(
             """INSERT INTO orders
-            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)""",
+            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method, delivery_fee)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)""",
             (datetime.now(VN_TZ).isoformat(timespec="seconds"), customer_chat_id,
-             customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method)
+             customer_name, phone, address, delivery_date, delivery_time, comment, items_text,
+             int(total) + DELIVERY_FEE, payment_method, DELIVERY_FEE)
         )
         return cur.lastrowid
 
@@ -747,7 +752,8 @@ async def get_comment(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🍱 {item['name']}\n"
         f"Количество: {qty}\n"
         f"Цена: 170.000 ₫ / порция\n"
-        f"*Итого: {total:,} ₫*\n\n".replace(",", ".") +
+        f"🚚 Доставка: {DELIVERY_FEE:,} ₫\n".replace(",", ".") +
+        f"*Итого к оплате: {total + DELIVERY_FEE:,} ₫*\n\n".replace(",", ".") +
         f"👤 Имя: {context.user_data['name']}\n"
         f"📱 Телефон: {context.user_data['phone']}\n"
         f"📍 Адрес: {context.user_data['address']}\n"
@@ -910,7 +916,8 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         admin_text = (
             "🐻 НОВЫЙ ЗАКАЗ САЙТА!\n\n"
             + "\n".join(lines)
-            + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
+            + f"\n\n🚚 ДОСТАВКА: {DELIVERY_FEE:,} ₫".replace(",", ".")
+            + f"\n💰 ИТОГО К ОПЛАТЕ: {total + DELIVERY_FEE:,} ₫".replace(",", ".")
             + f"\n\n👤 Имя: {customer_name}"
             + f"\n📱 Телефон: {phone}"
             + f"\n📍 Адрес: {address}"
@@ -1063,7 +1070,8 @@ async def order_api(request):
         )
         admin_text = (
             f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
-            + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
+            + f"\n\n🚚 ДОСТАВКА: {DELIVERY_FEE:,} ₫".replace(",", ".")
+            + f"\n💰 ИТОГО К ОПЛАТЕ: {total + DELIVERY_FEE:,} ₫".replace(",", ".")
             + f"\n\n👤 Имя: {customer_name}\n📱 Телефон: {phone}"
             + f"\n📍 Адрес: {address}\n📅 Дата доставки: {delivery_date}"
             + f"\n💳 Способ оплаты: {payment_method_label}"
