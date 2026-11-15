@@ -311,6 +311,14 @@ def delete_order(order_id):
         conn.execute("DELETE FROM orders WHERE id=? AND status='new'", (order_id,))
 
 
+def clear_all_orders():
+    """Delete all order rows while preserving schema, settings and ID history."""
+    with db_connect() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+        conn.execute("DELETE FROM orders")
+        return count
+
+
 def admin_only(update):
     return bool(ADMIN_CHAT_ID) and update.effective_user and str(update.effective_user.id) == ADMIN_CHAT_ID
 
@@ -319,7 +327,8 @@ def admin_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🆕 Новые заказы", callback_data="adm:list:new:0"),
          InlineKeyboardButton("📋 Все заказы", callback_data="adm:list:all:0")],
-        [InlineKeyboardButton("📊 Статистика и выручка", callback_data="adm:stats")]
+        [InlineKeyboardButton("📊 Статистика и выручка", callback_data="adm:stats")],
+        [InlineKeyboardButton("🗑 Очистить все заказы", callback_data="adm:clear:ask")]
     ])
 
 
@@ -374,7 +383,25 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("Нет доступа.", show_alert=True)
         return
     parts = q.data.split(":")
-    if parts[1] == "stats":
+    if parts[1] == "clear" and len(parts) > 2 and parts[2] == "ask":
+        with db_connect() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
+        await q.edit_message_text(
+            f"⚠️ Будут удалены все заказы: {count}. Каталог, цены, настройки и база напоминаний останутся без изменений. Резервные копии не удаляются. Продолжить?",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🗑 Да, удалить все заказы", callback_data="adm:clear:confirm")],
+                [InlineKeyboardButton("Отмена", callback_data="adm:home")]
+            ])
+        )
+        await q.answer()
+    elif parts[1] == "clear" and len(parts) > 2 and parts[2] == "confirm":
+        count = clear_all_orders()
+        await q.edit_message_text(
+            f"✅ Список заказов очищен. Удалено записей: {count}. Нумерация новых заказов продолжится без сброса.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")]])
+        )
+        await q.answer("Заказы удалены")
+    elif parts[1] == "stats":
         total, today_count, today_revenue, revenue, new_count = get_order_stats()
         text = ("📊 *СТАТИСТИКА BEAR MODE*\n\n"
                 f"🧾 Всего заказов: *{total}*\n"
