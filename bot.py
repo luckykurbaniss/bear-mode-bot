@@ -14,7 +14,7 @@ from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove, MenuButtonDefault
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, ReplyKeyboardRemove, MenuButtonDefault, MenuButtonWebApp
 )
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
@@ -540,20 +540,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Выбирай готовый сет или собери свой заказ!\n\n"
             "🔥 Готовые сеты — 170.000 ₫"
         )
-        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261113-3"
-        shop_keyboard = ReplyKeyboardMarkup(
-            [[KeyboardButton("🛒 Открыть магазин", web_app=WebAppInfo(url=shop_url))]],
-            resize_keyboard=True,
-            is_persistent=True,
+        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261115-4"
+        # Reply-keyboard Web Apps do not receive authenticated initData.
+        # Use the dedicated chat menu button, which launches a fully
+        # authenticated Mini App session and preserves server-side validation.
+        await context.bot.set_chat_menu_button(
+            chat_id=chat_id,
+            menu_button=MenuButtonWebApp(
+                text="🛒 Магазин",
+                web_app=WebAppInfo(url=shop_url),
+            ),
         )
 
         sent_ids = []
         msg = await update.message.reply_text(
-            welcome, parse_mode="Markdown", reply_markup=shop_keyboard
+            welcome, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove()
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «🛒 Магазин» слева от поля сообщения.",
             reply_markup=main_keyboard()
         )
         sent_ids.append(msg.message_id)
@@ -656,7 +661,7 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «🛒 Магазин» слева от поля сообщения.",
             reply_markup=main_keyboard()
         )
         await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
