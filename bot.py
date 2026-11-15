@@ -996,7 +996,7 @@ async def health_api(request):
     return web.json_response({"ok": True, "service": "BEAR MODE order API", "port": API_PORT})
 
 
-async def order_api(request):
+async def _order_api_unlocked(request):
     if request.method == "OPTIONS":
         return web.Response(status=204, headers={
             "Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
@@ -1149,6 +1149,12 @@ async def order_api(request):
         return web.json_response({"ok": False, "error": "Не удалось отправить заказ. Напишите @lucky_ranger."}, status=500, headers=headers)
 
 
+async def order_api(request):
+    """Serialize order submissions so retries cannot race into duplicate admin alerts."""
+    async with request.app["order_lock"]:
+        return await _order_api_unlocked(request)
+
+
 async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     await update.message.reply_text("Оформление остановлено. Чтобы начать заново, нажмите /start.")
@@ -1246,6 +1252,7 @@ async def main():
     backup_task = asyncio.create_task(automatic_backup_loop())
     api = web.Application(client_max_size=64 * 1024)
     api["bot"] = app.bot
+    api["order_lock"] = asyncio.Lock()
     api.router.add_get("/health", health_api)
     api.router.add_post("/api/orders", order_api)
     api.router.add_options("/api/orders", order_api)
