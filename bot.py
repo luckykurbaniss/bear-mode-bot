@@ -818,6 +818,10 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         address = str(order.get("address", "")).strip()
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
+        payment_method = str(order.get("payment_method", "cash")).strip()
+        if payment_method not in {"cash", "qr"}:
+            raise ValueError("Invalid payment method")
+        payment_label = "Наличные при получении" if payment_method == "cash" else "Перевод по QR-коду Vietcombank"
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
@@ -866,6 +870,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             + f"\n📱 Телефон: {phone}"
             + f"\n📍 Адрес: {address}"
             + f"\n📅 Дата доставки: {delivery_date}"
+            + f"\n💳 Способ оплаты: {payment_label}"
             + f"\n💬 Комментарий: {comment or 'Нет'}"
         )
         if user:
@@ -873,7 +878,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
 
         order_id = save_order(
             user.id if user else None, customer_name, phone, address,
-            delivery_date, "", comment, ", ".join(saved_items), total
+            delivery_date, "", (f"Способ оплаты: {payment_label}. " + comment).strip(), ", ".join(saved_items), total
         )
         admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
         try:
