@@ -320,21 +320,41 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
         await message.reply_text("Сообщение слишком длинное. Максимум 4000 символов.")
         return
 
-    draft["text"] = new_text
+    # Любое подтверждённое изменение черновика сразу отправляем клиенту.
+    # Это исключает ситуацию, когда администратор обновил текст, но забыл нажать
+    # отдельную кнопку отправки или кнопка отправляет старую версию.
+    try:
+        sent = await context.bot.send_message(
+            chat_id=int(draft["chat_id"]),
+            text=new_text,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception as exc:
+        log.exception(
+            "Could not auto-send edited customer reply: order_id=%s customer_chat_id=%s",
+            draft.get("order_id"), draft.get("chat_id"),
+        )
+        await message.reply_text(f"Не удалось отправить клиенту: {str(exc)[:180]}")
+        return
+
+    order_id = draft.get("order_id") or 0
+    log.info(
+        "Edited customer reply auto-sent: message_id=%s order_id=%s customer_chat_id=%s",
+        sent.message_id, order_id, draft["chat_id"],
+    )
+    context.user_data.pop("support_draft", None)
+    context.user_data.pop("support_preview_message_id", None)
+    context.user_data.pop("support_edit_prompt_message_id", None)
+    context.user_data.pop("support_edit_mode", None)
     try:
         await context.bot.edit_message_text(
             chat_id=message.chat_id,
             message_id=preview_id,
-            text=new_text,
-            reply_markup=_preview_keyboard(),
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
+            text="✅ Изменённое сообщение отправлено клиенту.",
+            reply_markup=None,
         )
-        context.user_data["support_edit_mode"] = False
-        context.user_data.pop("support_edit_prompt_message_id", None)
-        # Не отправляем отдельное подтверждение: обновлённый текст уже виден в черновике.
     except Exception:
-        log.exception("Could not update support draft preview")
-        await message.reply_text("Не удалось обновить предпросмотр. Черновик не отправлен. Попробуйте ещё раз.")
+        log.exception("Customer reply sent, but could not update admin draft preview")
 
 
 def _faq_answer(text):
