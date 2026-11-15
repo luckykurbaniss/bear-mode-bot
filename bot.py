@@ -312,10 +312,13 @@ def delete_order(order_id):
 
 
 def clear_all_orders():
-    """Delete all order rows while preserving schema, settings and ID history."""
+    """Delete all orders and reset numbering so the next order starts at №1."""
     with db_connect() as conn:
         count = conn.execute("SELECT COUNT(*) FROM orders").fetchone()[0]
         conn.execute("DELETE FROM orders")
+        # AUTOINCREMENT stores its next ID in sqlite_sequence.
+        # Reset only the orders counter; other tables and settings stay untouched.
+        conn.execute("DELETE FROM sqlite_sequence WHERE name = 'orders'")
         return count
 
 
