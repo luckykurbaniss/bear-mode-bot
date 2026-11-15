@@ -427,8 +427,12 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = []
         for order in orders:
             label = ORDER_STATUSES.get(order["status"], (order["status"],))[0]
-            rows.append([InlineKeyboardButton(f"№{order['id']} · {order['customer_name'][:16]} · {label}",
-                                               callback_data=f"adm:order:{order['id']}")])
+            payment_status = order["payment_status"] if "payment_status" in order.keys() else "unpaid"
+            payment_label = "✅ Деньги получены" if payment_status == "received" else "💵 Не оплачено"
+            rows.append([InlineKeyboardButton(
+                f"№{order['id']} · {order['customer_name'][:16]} · {label} · {payment_label}",
+                callback_data=f"adm:order:{order['id']}"
+            )])
         nav = []
         if page > 0:
             nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"adm:list:{status}:{page-1}"))
