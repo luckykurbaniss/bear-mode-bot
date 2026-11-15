@@ -487,7 +487,7 @@ def order_status_keyboard(customer_chat_id):
     buttons = [
         InlineKeyboardButton("🆕 Новый", callback_data=f"bmst:new:{customer_chat_id}"),
         InlineKeyboardButton("✅ Подтверждён", callback_data=f"bmst:confirmed:{customer_chat_id}"),
-        InlineKeyboardButton("👨‍🍳 Готовится", callback_data=f"bmst:cooking:{customer_chat_id}"),
+        InlineKeyboardButton("🍳 Готовится", callback_data=f"bmst:cooking:{customer_chat_id}"),
         InlineKeyboardButton("🛵 Курьеру", callback_data=f"bmst:courier:{customer_chat_id}"),
         InlineKeyboardButton("🎉 Доставлен", callback_data=f"bmst:delivered:{customer_chat_id}"),
         InlineKeyboardButton("❌ Отменён", callback_data=f"bmst:cancelled:{customer_chat_id}"),
