@@ -333,6 +333,18 @@ def admin_order_keyboard(order_id, status):
 
 def order_card_text(order):
     label = ORDER_STATUSES.get(order["status"], (order["status"], ""))[0]
+    payment_method = order["payment_method"] if "payment_method" in order.keys() else "cash"
+    payment_method_label = (
+        "Перевод по QR-коду Vietcombank" if payment_method == "qr"
+        else "Наличные при получении"
+    )
+    payment_status = order["payment_status"] if "payment_status" in order.keys() else "unpaid"
+    payment_status_label = (
+        "Клиент отметил оплату — проверить поступление"
+        if payment_method == "qr" and payment_status != "received"
+        else ("Оплачено / получено" if payment_status == "received"
+              else "Ожидается при получении")
+    )
     return (
         f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\n\n"
         f"📌 Статус: {label}\n"
@@ -343,9 +355,10 @@ def order_card_text(order):
         f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
         f"🍱 Заказ: {order['items_text']}\n"
         f"💰 Сумма: {order['total']:,} ₫\n"
+        f"💳 Способ оплаты: {payment_method_label}\n"
+        f"💵 Статус оплаты: {payment_status_label}\n"
         f"💬 Комментарий: {order['comment'] or 'Нет'}"
     ).replace(",", ".")
-
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not admin_only(update):
