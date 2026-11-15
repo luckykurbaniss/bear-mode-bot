@@ -73,19 +73,19 @@ def _order_text(order):
               else ("Ожидается при получении" if payment_method == "cash" else payment_status))
     )
     return (
-        f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\\n\\n"
-        f"📌 Статус заказа: {order_status}\\n"
-        f"🕒 Создан: {order['created_at']}\\n"
-        f"👤 Имя: {order['customer_name']}\\n"
-        f"📱 Телефон: {order['phone']}\\n"
-        f"📍 Адрес: {order['address']}\\n"
-        f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\\n"
-        f"🍱 Заказ: {order['items_text']}\\n"
-        f"💰 Сумма заказа: {order['total']:,} ₫\\n"
-        f"💳 Способ оплаты: {payment_method_label}\\n"
-        f"💵 Статус оплаты: {payment_status_label}\\n"
-        f"💬 Комментарий: {order['comment'] or 'Нет'}\\n\\n"
-        f"🚚 GrabExpress: {grab_status}\\n"
+        f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\n\n"
+        f"📌 Статус заказа: {order_status}\n"
+        f"🕒 Создан: {order['created_at']}\n"
+        f"👤 Имя: {order['customer_name']}\n"
+        f"📱 Телефон: {order['phone']}\n"
+        f"📍 Адрес: {order['address']}\n"
+        f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
+        f"🍱 Заказ: {order['items_text']}\n"
+        f"💰 Сумма заказа: {order['total']:,} ₫\n"
+        f"💳 Способ оплаты: {payment_method_label}\n"
+        f"💵 Статус оплаты: {payment_status_label}\n"
+        f"💬 Комментарий: {order['comment'] or 'Нет'}\n\n"
+        f"🚚 GrabExpress: {grab_status}\n"
         f"🧾 Grab ID: {order['grab_reference'] or 'не указан'}"
     ).replace(",", ".")
 
