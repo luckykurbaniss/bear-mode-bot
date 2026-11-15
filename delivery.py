@@ -374,8 +374,10 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             return
     if parts[1] == "delivery":
         current_grab = order["grab_status"] or "not_requested"
-        if order["status"] in {"cancelled", "delivered"}:
-            await q.answer("Для отменённого или доставленного заказа это действие недоступно.", show_alert=True)
+        if order["status"] == "cancelled" or (
+            order["status"] == "delivered" and action != "payment_received"
+        ):
+            await q.answer("Для отменённого заказа это действие недоступно.", show_alert=True)
             return
         already_applied = (
             (action == "grab_requested" and current_grab == "requested")
@@ -386,12 +388,20 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if already_applied:
             await q.answer("Это действие уже выполнено.")
             return
-        if action == "grab_requested" and current_grab != "not_requested":
-            await q.answer("Grab уже был вызван или курьер забрал заказ.", show_alert=True)
-            return
-        if action == "picked_up" and current_grab != "requested":
-            await q.answer("Сначала отметьте, что Grab вызван.", show_alert=True)
-            return
+        if action == "grab_requested":
+            if current_grab != "not_requested":
+                await q.answer("Grab уже был вызван или курьер забрал заказ.", show_alert=True)
+                return
+            if order["status"] not in {"confirmed", "cooking"}:
+                await q.answer("Сначала подтвердите заказ и подготовьте его к передаче курьеру.", show_alert=True)
+                return
+        if action == "picked_up":
+            if current_grab != "requested":
+                await q.answer("Сначала отметьте, что Grab вызван.", show_alert=True)
+                return
+            if order["status"] not in {"confirmed", "cooking"}:
+                await q.answer("Передача курьеру на этом этапе недоступна.", show_alert=True)
+                return
         if action == "delivered" and not (
             current_grab == "picked_up" or order["status"] == "courier"
         ):
