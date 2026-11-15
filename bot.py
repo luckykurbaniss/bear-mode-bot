@@ -20,7 +20,7 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message, order_edit_message
-from customer_service import support_callback, support_reply_message, customer_message_handler
+from customer_service import support_callback, support_reply_message, customer_message_handler, customer_order_confirmation_callback
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -1203,6 +1203,7 @@ async def main():
     app.add_handler(CommandHandler("admin", admin_command))
     # Customer-support callbacks must be handled before the general admin callback.
     app.add_handler(CallbackQueryHandler(support_callback, pattern=r"^support:"))
+    app.add_handler(CallbackQueryHandler(customer_order_confirmation_callback, pattern=r"^customer_order:"))
     # Handle order details and delivery controls before the general admin callback.
     app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference|edit):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
