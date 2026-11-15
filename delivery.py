@@ -166,10 +166,11 @@ def _parse_edited_items(raw_text):
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
-    # Always keep the cooking action in the order menu.
-    # Show a checkmark while the order's current status is cooking.
+    # Keep the cooking checkmark after the order advances to courier/delivered.
+    # These statuses mean the cooking stage has already been completed.
+    cooking_stage_reached = order["status"] in {"cooking", "courier", "delivered"}
     status_buttons = [
-        ("✅ Готовится" if order["status"] == "cooking" else "🍳 Готовится", "cooking")
+        ("✅ Готовится" if cooking_stage_reached else "🍳 Готовится", "cooking")
     ]
     available_statuses = status_buttons
     for start in range(0, len(available_statuses), 2):
