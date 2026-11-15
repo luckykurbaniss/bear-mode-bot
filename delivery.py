@@ -177,6 +177,26 @@ def _order_keyboard(order):
     return InlineKeyboardMarkup(rows)
 
 
+def _order_edit_keyboard(order_id):
+    """Build the field selector shown after the administrator taps Edit order."""
+    fields = [
+        ("👤 Имя клиента", "customer_name"),
+        ("📱 Телефон", "phone"),
+        ("📍 Адрес доставки", "address"),
+        ("📅 Дата доставки", "delivery_date"),
+        ("🍱 Состав и сумма", "items"),
+        ("💬 Комментарий", "comment"),
+    ]
+    rows = [
+        [InlineKeyboardButton(label, callback_data=f"adm:edit:{order_id}:{field}")]
+        for label, field in fields
+    ]
+    rows.append([
+        InlineKeyboardButton("⬅️ Назад к заказу", callback_data=f"adm:order:{order_id}")
+    ])
+    return InlineKeyboardMarkup(rows)
+
+
 async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles order details and manual delivery actions before the general admin handler."""
     q = update.callback_query
