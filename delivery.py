@@ -133,6 +133,15 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if not _get_order(order_id):
             await q.answer("Заказ не найден.", show_alert=True)
             return
+
+        # Ignore rapid repeated taps: one active Grab ID prompt per order/chat.
+        # Without this guard, a second prompt replaces the first prompt ID and
+        # a valid reply to the first visible message is rejected as outdated.
+        pending = context.chat_data.get("pending_grab_reference")
+        if pending and pending.get("order_id") == order_id:
+            await q.answer("Запрос Grab ID уже открыт. Ответьте на последнее сообщение с запросом.")
+            return
+
         prompt = await q.message.reply_text(
             f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение.\n"
             "Если передумали, просто не отправляйте ответ."
