@@ -154,13 +154,19 @@ def _order_keyboard(order):
         ("Новый", "new"), ("Подтверждён", "confirmed"),
         ("Готовится", "cooking"), ("Отменён", "cancelled"),
     ]
-    for start in range(0, len(status_buttons), 2):
+    # Show only available next statuses. The current status is omitted,
+    # so an old status can never keep a stale checkmark on the card.
+    available_statuses = [
+        (label, status) for label, status in status_buttons
+        if status != order["status"]
+    ]
+    for start in range(0, len(available_statuses), 2):
         row = [
             InlineKeyboardButton(
-                ("✅ " + label if status == order["status"] else label),
+                label,
                 callback_data=f"adm:set:{order_id}:{status}",
             )
-            for label, status in status_buttons[start:start + 2]
+            for label, status in available_statuses[start:start + 2]
         ]
         rows.append(row)
     if order["status"] not in {"delivered", "cancelled"}:
