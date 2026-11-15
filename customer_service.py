@@ -228,11 +228,14 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not context.user_data.get("support_draft"):
             await q.answer("Сначала выберите шаблон.", show_alert=True)
             return
-        await q.message.reply_text(
-            "✏️ Отправьте новый текст ответом на сообщение с черновиком. "
-            "После этого можно будет отправить его клиенту."
+        prompt = await q.message.reply_text(
+            "✏️ Отправьте новый текст ответом на это сообщение или ответом на сам черновик. "
+            "Можно также отправить текст обычным сообщением в чат. "
+            "После обновления нажмите «Отправить клиенту»."
         )
-        await q.answer()
+        context.user_data["support_edit_prompt_message_id"] = prompt.message_id
+        context.user_data["support_edit_mode"] = True
+        await q.answer("Жду исправленный текст")
         return
 
     if action == "send":
@@ -250,6 +253,8 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         log.info("Admin sent support reply: order_id=%s customer_chat_id=%s", order_id, draft["chat_id"])
         context.user_data.pop("support_draft", None)
         context.user_data.pop("support_preview_message_id", None)
+        context.user_data.pop("support_edit_prompt_message_id", None)
+        context.user_data.pop("support_edit_mode", None)
         await q.edit_message_text("✅ Сообщение отправлено клиенту.")
         await q.answer("Отправлено")
         return
@@ -257,6 +262,8 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action in {"cancel", "close"}:
         context.user_data.pop("support_draft", None)
         context.user_data.pop("support_preview_message_id", None)
+        context.user_data.pop("support_edit_prompt_message_id", None)
+        context.user_data.pop("support_edit_mode", None)
         if action == "close":
             context.user_data.pop("support_target", None)
         await q.edit_message_text("Действие отменено.")
@@ -265,20 +272,31 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Update the active customer-message draft from a reply or direct admin text."""
     message = update.effective_message
-    if not _admin(update) or not message or not message.reply_to_message:
+    if not _admin(update) or not message or not message.text:
         return
     preview_id = context.user_data.get("support_preview_message_id")
+    edit_prompt_id = context.user_data.get("support_edit_prompt_message_id")
     draft = context.user_data.get("support_draft")
-    if not preview_id or not draft or message.reply_to_message.message_id != preview_id:
+    if not preview_id or not draft:
         return
-    new_text = (message.text or "").strip()
+
+    reply_id = message.reply_to_message.message_id if message.reply_to_message else None
+    is_reply_to_draft = reply_id == preview_id
+    is_reply_to_edit_prompt = bool(edit_prompt_id and reply_id == edit_prompt_id)
+    is_direct_edit = bool(context.user_data.get("support_edit_mode") and reply_id is None)
+    if not (is_reply_to_draft or is_reply_to_edit_prompt or is_direct_edit):
+        return
+
+    new_text = message.text.strip()
     if not new_text:
         await message.reply_text("Текст ответа не должен быть пустым.")
         return
     if len(new_text) > 4000:
         await message.reply_text("Сообщение слишком длинное. Максимум 4000 символов.")
         return
+
     draft["text"] = new_text
     try:
         await context.bot.edit_message_text(
@@ -288,10 +306,12 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
                  + "\n\nНажмите «Отправить клиенту» или измените текст ответом на это сообщение.",
             reply_markup=_preview_keyboard(),
         )
-        await message.reply_text("Черновик обновлён. Проверьте его и нажмите кнопку отправки.")
+        context.user_data["support_edit_mode"] = False
+        context.user_data.pop("support_edit_prompt_message_id", None)
+        await message.reply_text("✅ Черновик обновлён. Именно этот текст будет отправлен клиенту после нажатия «Отправить клиенту».")
     except Exception:
         log.exception("Could not update support draft preview")
-        await message.reply_text("Не удалось обновить предпросмотр. Попробуйте ещё раз.")
+        await message.reply_text("Не удалось обновить предпросмотр. Черновик не отправлен. Попробуйте ещё раз.")
 
 
 def _faq_answer(text):
