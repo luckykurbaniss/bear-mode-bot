@@ -1078,10 +1078,14 @@ async def order_api(request):
                     InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
                 ]])
             )
-            await send_order_welcome(request.app["bot"], order_id)
         except Exception:
             delete_order(order_id)
             raise
+        try:
+            await send_order_welcome(request.app["bot"], order_id)
+        except Exception:
+            # The order is already stored and delivered to the administrator.
+            log.exception("Order %s was forwarded, but the welcome template could not be sent", order_id)
         return web.json_response({"ok": True, "order_id": order_id}, headers=headers)
     except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=400, headers=headers)
