@@ -20,7 +20,7 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message, order_edit_message
-from customer_service import support_callback, support_reply_message, customer_message_handler, customer_order_confirmation_callback
+from customer_service import support_callback, support_reply_message, customer_message_handler, customer_order_confirmation_callback, send_order_welcome
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -811,10 +811,8 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             delete_order(order_id)
             raise
 
-        await q.edit_message_text(
-            "🎉 Заказ получен! Спасибо!\n\n"
-            "Мы скоро свяжемся с вами для подтверждения доставки."
-        )
+        await send_order_welcome(context.bot, order_id)
+        await q.edit_message_text("✅ Заказ оформлен. Отправили вам сообщение с деталями для подтверждения.")
 
     except Exception:
         log.exception("Failed to forward order")
@@ -942,14 +940,10 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             delete_order(order_id)
             raise
         try:
-            await message.reply_text(
-                "🎉 Заказ получен! Спасибо!\n"
-                "Мы скоро свяжемся с вами для подтверждения доставки."
-            )
+            await send_order_welcome(context.bot, order_id)
         except Exception:
-            # The administrator already received and the database saved the order.
-            # A failed customer acknowledgement must not report a false order failure.
-            log.exception("Order %s was forwarded, but customer acknowledgement failed", order_id)
+            # The administrator already received and the order is safely stored.
+            log.exception("Order %s was forwarded, but the welcome template could not be sent", order_id)
     except (ValueError, TypeError, json.JSONDecodeError):
         log.exception("Invalid order received from website")
         await message.reply_text(
@@ -1084,10 +1078,7 @@ async def order_api(request):
                     InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
                 ]])
             )
-            await request.app["bot"].send_message(
-                chat_id=int(user["id"]),
-                text=f"🎉 Заказ №{order_id} принят! Спасибо. Скоро свяжемся для подтверждения доставки."
-            )
+            await send_order_welcome(request.app["bot"], order_id)
         except Exception:
             delete_order(order_id)
             raise
