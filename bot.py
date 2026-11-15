@@ -212,8 +212,11 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'new'
         )""")
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(orders)")}
-        if "delivery_fee" not in columns:
-            conn.execute("ALTER TABLE orders ADD COLUMN delivery_fee INTEGER NOT NULL DEFAULT 0")
+        # One-time rollback of the former fixed delivery charge from existing orders.
+        # New orders no longer store or add a delivery fee.
+        if "delivery_fee" in columns:
+            conn.execute("UPDATE orders SET total = total - delivery_fee WHERE delivery_fee > 0")
+            conn.execute("UPDATE orders SET delivery_fee = 0 WHERE delivery_fee > 0")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
         # Keep the legacy table available for safe migration on both old
