@@ -561,6 +561,24 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     else:
         await message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
 
+    # Once the ID is stored and the order card is refreshed, remove the
+    # temporary prompt and the administrator's submitted ID from the chat.
+    # Keep the persistent order card intact.
+    prompt_id = pending.get("prompt_id")
+    for temporary_message_id in (prompt_id, message.message_id):
+        if not temporary_message_id:
+            continue
+        try:
+            await context.bot.delete_message(
+                chat_id=message.chat_id,
+                message_id=temporary_message_id,
+            )
+        except BadRequest as exc:
+            log.info(
+                "Temporary Grab ID message could not be deleted: chat_id=%s message_id=%s error=%s",
+                message.chat_id, temporary_message_id, exc,
+            )
+
 
 async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validate and save one administrator-entered order edit."""
