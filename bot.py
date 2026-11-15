@@ -812,7 +812,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise
 
         await q.edit_message_text(
-            "🎉 Заказ отправлен! Спасибо!\n\n"
+            "🎉 Заказ получен! Спасибо!\n\n"
             "Мы скоро свяжемся с вами для подтверждения доставки."
         )
 
@@ -943,7 +943,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             raise
         try:
             await message.reply_text(
-                "🎉 Заказ отправлен! Спасибо!\n"
+                "🎉 Заказ получен! Спасибо!\n"
                 "Мы скоро свяжемся с вами для подтверждения доставки."
             )
         except Exception:
