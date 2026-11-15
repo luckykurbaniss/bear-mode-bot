@@ -620,6 +620,10 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
             context.chat_data.pop("pending_grab_tracking", None)
             await message.reply_text("Заказ не найден. Откройте его заново в панели.")
             return
+        if tracking_order["grab_status"] != "picked_up" or tracking_order["status"] != "courier":
+            context.chat_data.pop("pending_grab_tracking", None)
+            await message.reply_text("Сначала отметьте «Курьер забрал». После этого можно добавить ссылку отслеживания.")
+            return
         if tracking_order["grab_tracking_url"]:
             context.chat_data.pop("pending_grab_tracking", None)
             await message.reply_text("Ссылка отслеживания уже была добавлена. Повторное изменение запрещено.")
@@ -701,6 +705,10 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     if not order:
         context.chat_data.pop("pending_grab_reference", None)
         await message.reply_text("Заказ не найден. Откройте его заново в панели.")
+        return
+    if order["status"] != "cooking":
+        context.chat_data.pop("pending_grab_reference", None)
+        await message.reply_text("Сначала подтвердите заказ и отметьте «Готовится», затем укажите Grab ID.")
         return
     if order["grab_reference"]:
         context.chat_data.pop("pending_grab_reference", None)
