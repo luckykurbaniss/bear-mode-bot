@@ -153,9 +153,11 @@ def _parse_edited_items(raw_text):
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
-    status_buttons = [
-        ("Готовится", "cooking"),
-    ]
+    status_buttons = (
+        [("Подтвердить заказ", "confirmed")]
+        if order["status"] == "new"
+        else ([("Готовится", "cooking")] if order["status"] == "confirmed" else [])
+    )
     # Show only available next statuses. The current status is omitted,
     # so an old status can never keep a stale checkmark on the card.
     available_statuses = [
