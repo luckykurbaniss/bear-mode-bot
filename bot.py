@@ -547,7 +547,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.set_chat_menu_button(
             chat_id=chat_id,
             menu_button=MenuButtonWebApp(
-                text="🛒 Магазин",
+                text="Магазин",
                 web_app=WebAppInfo(url=shop_url),
             ),
         )
@@ -558,7 +558,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «🛒 Магазин» слева от поля сообщения.",
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Магазин» слева от поля сообщения.",
             reply_markup=main_keyboard()
         )
         sent_ids.append(msg.message_id)
@@ -661,7 +661,7 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «🛒 Магазин» слева от поля сообщения.",
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Магазин» слева от поля сообщения.",
             reply_markup=main_keyboard()
         )
         await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
@@ -678,7 +678,7 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
             await q.edit_message_text(
                 "🚚 *Доставка BEAR MODE*\n\n"
                 "Детали доставки согласуем после получения адреса и даты.\n\n"
-                "Оформить заказ можно через кнопку «🛒 Открыть магазин» внизу чата.",
+                "Оформить заказ можно через кнопку «Открыть магазин» внизу чата.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]
