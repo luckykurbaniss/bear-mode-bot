@@ -271,11 +271,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             return
         field = parts[3]
         if field == "status":
-            if order["status"] in {"delivered", "cancelled"} and len(parts) == 4:
-                pass
             if len(parts) == 4:
                 await q.edit_message_text(
-                    "🔄 *ИЗМЕНЕНИЕ СТАТУСА ЗАКАЗА №" + str(order_id) + "*\\n\\nВыберите новый статус:",
+                    "🔄 *ИЗМЕНЕНИЕ СТАТУСА ЗАКАЗА №" + str(order_id) + "*\n\nВыберите новый статус:",
                     parse_mode="Markdown",
                     reply_markup=_order_status_keyboard(order),
                 )
