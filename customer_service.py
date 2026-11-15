@@ -130,7 +130,7 @@ def _format_template(template_id, order):
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
         text = (
-            "Добрый день! Спасибо за заказ в BEAR MODE 🐼\n\n"
+            "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE\n\n"
             f"📍 Адрес: {address}\n"
             f"🍱 Заказ: {items}\n"
             f"💰 Итого к оплате: {total} + стоимость доставки "
