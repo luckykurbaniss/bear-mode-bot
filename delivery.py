@@ -367,6 +367,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if order["grab_tracking_url"]:
             await q.answer("Ссылка отслеживания уже добавлена. Повторно изменить её нельзя.", show_alert=True)
             return
+        # A new tracking-link request supersedes any stale Grab ID request.
+        context.chat_data.pop("pending_grab_reference", None)
         prompt = await q.message.reply_text(
             f"🔗 Отправьте ссылку отслеживания GrabExpress для заказа №{order_id}.\n"
             "Вставьте полную ссылку, начинающуюся с https://."
@@ -397,8 +399,11 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer("Запрос Grab ID уже открыт. Ответьте на последнее сообщение с запросом.")
             return
 
+        # A new Grab ID request supersedes any stale tracking-link request.
+        context.chat_data.pop("pending_grab_tracking", None)
         prompt = await q.message.reply_text(
             f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение.\n"
+            "Это именно ID, не ссылка. Например, отправьте код/номер, который выдал Grab.\n"
             "Если передумали, просто не отправляйте ответ."
         )
         # Keep the pending request per chat so callback and reply updates share it.
