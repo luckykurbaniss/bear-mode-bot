@@ -129,7 +129,6 @@ async def send_order_welcome(bot, order_id):
     await bot.send_message(
         chat_id=int(order["customer_chat_id"]),
         text=_format_template(template_id, order),
-        reply_markup=_customer_order_confirmation_keyboard(int(order_id)),
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
 
@@ -203,8 +202,7 @@ def _format_template(template_id, order):
                 if template_id == "welcome_confirm_qr"
                 else "💵 Оплата: ожидается при получении\n\n"
             )
-            + "Если всё верно, пожалуйста, подтвердите заказ — и мы сразу возьмём его в работу. "
-            "Следите за статусом в боте ❤️"
+            + "Следите за статусом заказа в боте ❤️"
         )
     elif order and template_id == "total":
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
@@ -316,7 +314,6 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(
                 chat_id=int(draft["chat_id"]),
                 text=draft["text"].strip(),
-                reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") in {"welcome_confirm", "welcome_confirm_qr"} else None),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as exc:
