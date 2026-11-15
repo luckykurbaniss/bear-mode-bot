@@ -285,12 +285,14 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
 
 def _faq_answer(text):
     value = text.lower().replace("ё", "е")
+    if any(word in value for word in ("достав", "курьер", "привез")):
+        if any(word in value for word in ("время", "когда", "во сколько", "долго")):
+            return "Время доставки согласуем при подтверждении заказа. Напишите, пожалуйста, удобное для вас время 😊"
+        return "Доставка оплачивается отдельно. Напишите, пожалуйста, ваш адрес — мы уточним стоимость и возможность доставки в ваш район. 🚚"
     if any(word in value for word in ("цен", "стоим", "сколько", "прайс", "меню")):
         return MENU_TEXT
     if any(word in value for word in ("оплат", "налич", "перевод", "перевести")):
         return "Оплатить заказ можно наличными или переводом. Доставка оплачивается отдельно. 😊"
-    if any(word in value for word in ("достав", "курьер", "привез")):
-        return "Доставка оплачивается отдельно. Напишите, пожалуйста, ваш адрес — мы уточним стоимость и возможность доставки в ваш район. 🚚"
     if any(word in value for word in ("аллерг", "неперенос", "нельзя", "без ")):
         return None
     if any(word in value for word in ("измен", "добав", "убрать", "отмен", "замен", "исправ")):
