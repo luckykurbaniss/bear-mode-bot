@@ -375,6 +375,8 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = update.effective_message
     if not _admin_only(update) or not message:
         return
+    if message.reply_to_message and message.reply_to_message.message_id == context.user_data.get("support_preview_message_id"):
+        return
     pending = context.chat_data.get("pending_order_edit")
     if not pending:
         return
@@ -466,6 +468,8 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     message = update.effective_message
     if not _admin_only(update) or not message:
         log.warning("Grab ID reply ignored: unauthorized user or missing message")
+        return
+    if message.reply_to_message and message.reply_to_message.message_id == context.user_data.get("support_preview_message_id"):
         return
     pending = context.chat_data.get("pending_grab_reference")
     if not pending:
