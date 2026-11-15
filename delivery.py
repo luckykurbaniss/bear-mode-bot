@@ -184,6 +184,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if parts[1] == "edit":
+        context.chat_data.pop("pending_grab_reference", None)
         order_id = int(parts[2])
         order = _get_order(order_id)
         if not order:
@@ -225,6 +226,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     if parts[1] == "reference":
+        context.chat_data.pop("pending_order_edit", None)
         order_id = int(parts[2])
         if not _get_order(order_id):
             await q.answer("Заказ не найден.", show_alert=True)
