@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
+from customer_service import support_order_button
 
 log = logging.getLogger(__name__)
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
@@ -168,6 +169,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton("🛵 Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton("💵 Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
         [InlineKeyboardButton("🎉 Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
+        support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
     return InlineKeyboardMarkup(rows)
@@ -373,6 +375,8 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = update.effective_message
     if not _admin_only(update) or not message:
         return
+    if message.reply_to_message and message.reply_to_message.message_id == context.user_data.get("support_preview_message_id"):
+        return
     pending = context.chat_data.get("pending_order_edit")
     if not pending:
         return
@@ -464,6 +468,8 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     message = update.effective_message
     if not _admin_only(update) or not message:
         log.warning("Grab ID reply ignored: unauthorized user or missing message")
+        return
+    if message.reply_to_message and message.reply_to_message.message_id == context.user_data.get("support_preview_message_id"):
         return
     pending = context.chat_data.get("pending_grab_reference")
     if not pending:

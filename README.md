@@ -41,3 +41,14 @@
 - Сервер пересчитывает итог по собственному каталогу, а не доверяет цене, переданной браузером.
 - Изменения каталога нужно синхронно вносить в данные сайта и серверный список цен в `bot.py`.
 - Перед изменениями базы данных делайте отдельную резервную копию SQLite-файла.
+
+
+## Customer support automation
+
+- Each order card has a "Ответить клиенту" action for the administrator.
+- The administrator selects a reply category and a saved template, previews it, can replace the text by replying to the preview, and sends it to the customer only after pressing the send button.
+- Customer FAQs are answered automatically for known topics: menu/prices, delivery policy, payment methods, greeting and general food-composition requests.
+- Requests about order changes, cancellations, allergies, complaints and other unknown topics are forwarded to the administrator with a direct reply action.
+- Unknown questions are not guessed; the bot acknowledges receipt and escalates them to the administrator.
+- The current automatic FAQ matcher is deterministic and does not require an external AI API key. It must not be described as a generative AI assistant.
+- The support feature does not change order statuses or the existing automatic order-status notifications.
