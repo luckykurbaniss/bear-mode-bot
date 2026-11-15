@@ -154,8 +154,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if not order:
             await q.answer("Заказ не найден.", show_alert=True)
             return
-        await q.edit_message_text(_order_text(order), reply_markup=_order_keyboard(order))
-        await q.answer()
+        await q.message.reply_text(_order_text(order), reply_markup=_order_keyboard(order))
+        await q.answer("Заказ открыт")
         return
 
     if len(parts) != 4:
@@ -227,18 +227,15 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             log.exception("Could not notify customer about delivery update for order %s", order_id)
 
     updated = _get_order(order_id)
+    # Retire the tapped card so it cannot be mistaken for the current state.
+    # Publish a fresh order card with the latest database values and controls.
     try:
-        await q.edit_message_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+        await q.message.edit_reply_markup(reply_markup=None)
     except BadRequest as exc:
         if "Message is not modified" not in str(exc):
-            raise
-        log.info(
-            "Delivery card already shows current values: order_id=%s action=%s",
-            order_id, action,
-        )
-        await q.answer("Этот статус уже установлен.")
-        return
-    await q.answer("Обновлено")
+            log.warning("Could not retire old order keyboard: %s", exc)
+    await q.message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+    await q.answer("Заказ обновлён")
 
 
 async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,4 +279,5 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     context.chat_data.pop("pending_grab_reference", None)
     updated = _get_order(pending_order_id)
     log.info("Grab ID saved successfully: order_id=%s", pending_order_id)
-    await message.reply_text("✅ Grab ID сохранён.\n\n" + _order_text(updated))
+    await message.reply_text("✅ Grab ID сохранён.")
+    await message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
