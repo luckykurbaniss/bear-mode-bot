@@ -4,6 +4,7 @@ import sqlite3
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
+from urllib.parse import urlsplit
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
@@ -55,6 +56,7 @@ def init_delivery_db():
         additions = {
             "grab_status": "TEXT NOT NULL DEFAULT 'not_requested'",
             "grab_reference": "TEXT",
+            "grab_tracking_url": "TEXT",
             "payment_status": "TEXT NOT NULL DEFAULT 'unpaid'",
             "payment_method": "TEXT NOT NULL DEFAULT 'cash'",
         }
@@ -115,7 +117,8 @@ def _order_text(order):
         f"💵 Статус оплаты: {payment_status_label}\n"
         f"💬 Комментарий: {order['comment'] or 'Нет'}\n\n"
         f"🚚 GrabExpress: {grab_status}\n"
-        f"🧾 Grab ID: {order['grab_reference'] or 'не указан'}"
+        f"🧾 Grab ID: {order['grab_reference'] or 'не указан'}\n"
+        f"🔗 Ссылка отслеживания: {order['grab_tracking_url'] or 'не добавлена'}"
     ).replace(",", ".")
 
 
@@ -173,6 +176,7 @@ def _order_keyboard(order):
         rows.append([InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")])
     rows.extend([
         [InlineKeyboardButton(("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
+        [InlineKeyboardButton(("✅ " if order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton(("✅ " if order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
