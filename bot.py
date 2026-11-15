@@ -1013,7 +1013,7 @@ async def order_api(request):
     try:
         user = validate_telegram_init_data(request.headers.get("X-Telegram-Init-Data", ""))
         order = await request.json()
-        if order.get("type") != "bear_mode_order":
+        if not isinstance(order, dict) or order.get("type") != "bear_mode_order":
             raise ValueError("Unknown order type")
         customer_name = str(order.get("customer_name", "")).strip()
         phone = str(order.get("phone", "")).strip()
@@ -1077,6 +1077,22 @@ async def order_api(request):
             ).fetchone()
         if existing:
             order_id = existing["id"]
+            with db_connect() as conn:
+                saved = conn.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+            incoming_items = ", ".join(saved_items)
+            same_payload = (
+                saved["customer_chat_id"] == int(user["id"])
+                and saved["customer_name"] == customer_name
+                and saved["phone"] == phone
+                and saved["address"] == address
+                and saved["delivery_date"] == delivery_date
+                and (saved["comment"] or "") == comment
+                and saved["items_text"] == incoming_items
+                and int(saved["total"]) == total
+                and saved["payment_method"] == payment_method
+            )
+            if not same_payload:
+                return web.json_response({"ok": False, "error": "Этот запрос уже использован для другого заказа."}, status=409, headers=headers)
             if existing["admin_notified"]:
                 return web.json_response({"ok": True, "order_id": order_id, "duplicate": True}, headers=headers)
         else:
