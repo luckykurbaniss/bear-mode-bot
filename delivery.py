@@ -297,4 +297,3 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
             await message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
     else:
         await message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
-    await message.reply_text("✅ Grab ID сохранён.")
