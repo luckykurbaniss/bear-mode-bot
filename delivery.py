@@ -250,40 +250,33 @@ def _order_edit_keyboard(order_id):
 
 
 def _order_status_keyboard(order):
-    """Show order statuses and operational stages; omit edit-order and customer-reply actions."""
+    """Mirror the main order menu sequence, with New first and Cancelled last."""
     order_id = order["id"]
     rows = []
-
-    # Match every checkmark to the main order card exactly.
     show_progress = order["status"] != "cancelled"
     confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "courier", "delivered"}
     cooking_stage_reached = show_progress and order["status"] in {"cooking", "courier", "delivered"}
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
-    statuses = [
-        ("🆕 Новый", "new", order["status"] == "new"),
-        ("Подтверждён", "confirmed", confirmed_stage_reached),
-        ("Готовится", "cooking", cooking_stage_reached),
-        ("Передан курьеру", "courier", courier_stage_reached),
-        ("Доставлен", "delivered", show_progress and order["status"] == "delivered"),
-        ("❌ Отменён", "cancelled", order["status"] == "cancelled"),
-    ]
-    for label, status, completed in statuses:
-        if status == "confirmed":
-            label = ("✅ " if completed else "🤝 ") + label
-        elif status == "cooking":
-            label = ("✅ " if completed else "🍳 ") + label
-        elif status == "courier":
-            label = ("✅ " if completed else "🛵 ") + label
-        elif status == "delivered":
-            label = ("✅ " if completed else "🎉 ") + label
-        elif status == "new" and completed:
-            label = "✅ " + label
-        rows.append([
-            InlineKeyboardButton(
-                label,
-                callback_data=f"adm:edit:{order_id}:status:{status}",
-            )
-        ])
+
+    # Keep the exact same operational sequence as the main order card.
+    rows.append([
+        InlineKeyboardButton(
+            ("✅ " if order["status"] == "new" else "🆕 ") + "Новый",
+            callback_data=f"adm:edit:{order_id}:status:new",
+        )
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            ("✅ " if confirmed_stage_reached else "🤝 ") + "Подтверждён",
+            callback_data=f"adm:edit:{order_id}:status:confirmed",
+        )
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            ("✅ " if cooking_stage_reached else "🍳 ") + "Готовится",
+            callback_data=f"adm:edit:{order_id}:status:cooking",
+        )
+    ])
 
     operational_actions = [
         (
@@ -311,10 +304,21 @@ def _order_status_keyboard(order):
         rows.append([InlineKeyboardButton(label, callback_data=callback_data)])
 
     rows.append([
+        InlineKeyboardButton(
+            ("✅ " if show_progress and order["status"] == "delivered" else "🎉 ") + "Доставлен",
+            callback_data=f"adm:edit:{order_id}:status:delivered",
+        )
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            ("✅ " if order["status"] == "cancelled" else "❌ ") + "Отменён",
+            callback_data=f"adm:edit:{order_id}:status:cancelled",
+        )
+    ])
+    rows.append([
         InlineKeyboardButton("⬅️ Назад к изменению заказа", callback_data=f"adm:edit:{order_id}")
     ])
     return InlineKeyboardMarkup(rows)
-
 
 async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handles order details and manual delivery actions before the general admin handler."""
