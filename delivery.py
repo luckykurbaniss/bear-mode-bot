@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
+from customer_service import support_order_button
 
 log = logging.getLogger(__name__)
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
@@ -168,6 +169,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton("🛵 Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton("💵 Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
         [InlineKeyboardButton("🎉 Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
+        support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
     return InlineKeyboardMarkup(rows)
