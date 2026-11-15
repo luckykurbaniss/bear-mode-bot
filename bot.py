@@ -822,6 +822,10 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if payment_method not in {"cash", "qr"}:
             raise ValueError("Invalid payment method")
         payment_label = "Наличные при получении" if payment_method == "cash" else "Перевод по QR-коду Vietcombank"
+        payment_confirmed = order.get("payment_confirmed") is True
+        if payment_method == "qr" and not payment_confirmed:
+            raise ValueError("QR payment has not been confirmed by the customer")
+        payment_status = "Клиент отметил оплату — проверить поступление" if payment_method == "qr" else "Оплата при получении"
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
@@ -871,6 +875,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
             + f"\n📍 Адрес: {address}"
             + f"\n📅 Дата доставки: {delivery_date}"
             + f"\n💳 Способ оплаты: {payment_label}"
+            + f"\n💰 Статус оплаты: {payment_status}"
             + f"\n💬 Комментарий: {comment or 'Нет'}"
         )
         if user:
