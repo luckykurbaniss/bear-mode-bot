@@ -371,7 +371,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
 
 
 async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Save a Grab booking/reference ID sent as a reply to the admin prompt."""
+    """Save a Grab ID sent directly or as a reply to the active admin prompt."""
     message = update.effective_message
     if not _admin_only(update) or not message:
         log.warning("Grab ID reply ignored: unauthorized user or missing message")
@@ -381,12 +381,14 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
         log.info("Text reply received without a pending Grab ID request: chat_id=%s", message.chat_id)
         return
     reply = message.reply_to_message
-    if not reply or reply.message_id != pending["prompt_id"]:
+    # Accept both ways: a direct text message while a Grab ID request is pending,
+    # or a reply specifically to the active Grab ID prompt.
+    if reply and reply.message_id != pending["prompt_id"]:
         log.info(
-            "Grab ID reply did not match prompt: chat_id=%s expected_prompt_id=%s actual_reply_id=%s",
-            message.chat_id, pending["prompt_id"], reply.message_id if reply else None,
+            "Grab ID reply targeted another message: chat_id=%s expected_prompt_id=%s actual_reply_id=%s",
+            message.chat_id, pending["prompt_id"], reply.message_id,
         )
-        await message.reply_text("Пожалуйста, отправьте Grab ID именно ответом на последнее сообщение с запросом.")
+        await message.reply_text("Если отвечаете на сообщение, выберите последнее сообщение с запросом Grab ID. Можно также отправить ID обычным сообщением.")
         return
     pending_order_id = pending["order_id"]
     log.info(
