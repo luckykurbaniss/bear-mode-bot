@@ -219,6 +219,7 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             + "\n\nЧтобы изменить текст, ответьте на это сообщение своим вариантом. "
               "Затем нажмите «Отправить клиенту».",
             reply_markup=_preview_keyboard(),
+            disable_web_page_preview=True,
         )
         context.user_data["support_preview_message_id"] = preview.message_id
         await q.answer()
@@ -244,7 +245,11 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.answer("Черновик не найден.", show_alert=True)
             return
         try:
-            await context.bot.send_message(chat_id=draft["chat_id"], text=draft["text"])
+            await context.bot.send_message(
+                chat_id=draft["chat_id"],
+                text=draft["text"],
+                disable_web_page_preview=True,
+            )
         except Exception:
             log.exception("Could not send support reply to customer")
             await q.answer("Не удалось отправить. Проверьте, доступен ли чат клиента.", show_alert=True)
@@ -305,6 +310,7 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
             text="✏️ Обновлённый черновик сообщения клиенту:\n\n" + new_text
                  + "\n\nНажмите «Отправить клиенту» или измените текст ответом на это сообщение.",
             reply_markup=_preview_keyboard(),
+            disable_web_page_preview=True,
         )
         context.user_data["support_edit_mode"] = False
         context.user_data.pop("support_edit_prompt_message_id", None)
