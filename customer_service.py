@@ -129,6 +129,9 @@ def _format_template(template_id, order):
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
+        # Не вставляем Google Maps URL в шаблон: Telegram показывает карточку-ссылку.
+        if address.startswith(("https://", "http://")):
+            address = "указан при оформлении заказа"
         text = (
             "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE\n\n"
             f"📍 Адрес: {address}\n"
@@ -238,27 +241,41 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if action == "send":
         draft = context.user_data.get("support_draft")
-        if not draft:
-            await q.answer("Черновик не найден.", show_alert=True)
+        if not draft or not draft.get("chat_id") or not draft.get("text", "").strip():
+            await q.answer("Черновик пустой или не найден. Создайте его заново.", show_alert=True)
             return
+
+        # Сначала отправляем клиенту именно актуальный текст черновика.
         try:
-            await context.bot.send_message(
-                chat_id=draft["chat_id"],
-                text=draft["text"],
+            sent = await context.bot.send_message(
+                chat_id=int(draft["chat_id"]),
+                text=draft["text"].strip(),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
-        except Exception:
-            log.exception("Could not send support reply to customer")
-            await q.answer("Не удалось отправить. Проверьте, доступен ли чат клиента.", show_alert=True)
+        except Exception as exc:
+            log.exception(
+                "Could not send support reply: order_id=%s customer_chat_id=%s",
+                draft.get("order_id"), draft.get("chat_id"),
+            )
+            await q.answer(f"Не отправлено: {str(exc)[:180]}", show_alert=True)
             return
+
         order_id = draft.get("order_id") or 0
-        log.info("Admin sent support reply: order_id=%s customer_chat_id=%s", order_id, draft["chat_id"])
+        log.info(
+            "Admin support reply delivered: message_id=%s order_id=%s customer_chat_id=%s",
+            sent.message_id, order_id, draft["chat_id"],
+        )
         context.user_data.pop("support_draft", None)
         context.user_data.pop("support_preview_message_id", None)
         context.user_data.pop("support_edit_prompt_message_id", None)
         context.user_data.pop("support_edit_mode", None)
-        await q.edit_message_text("✅ Сообщение отправлено клиенту.")
-        await q.answer("Отправлено")
+
+        # Не допускаем повторной отправки по старой кнопке.
+        try:
+            await q.edit_message_text("✅ Сообщение отправлено клиенту.")
+        except Exception:
+            log.exception("Customer reply sent, but could not update admin preview")
+        await q.answer("Отправлено клиенту")
         return
 
     if action in {"cancel", "close"}:
