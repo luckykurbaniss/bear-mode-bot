@@ -199,7 +199,7 @@ def _format_template(template_id, order):
             + (
                 "💳 Оплата: перевод по QR-коду Vietcombank ✅\n\n"
                 if template_id == "welcome_confirm_qr"
-                else "\n"
+                else "💵 Оплата: ожидается при получении\n\n"
             )
             + "Если всё верно, пожалуйста, подтвердите заказ — и мы сразу возьмём его в работу. "
             "Следите за статусом в боте ❤️"
