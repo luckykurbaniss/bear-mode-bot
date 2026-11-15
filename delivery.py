@@ -506,7 +506,22 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
                 )
             except BadRequest as exc:
                 log.warning("Could not refresh order card after tracking URL save: %s", exc)
-        await message.reply_text("✅ Ссылка отслеживания сохранена и отправлена клиенту.")
+
+        # Remove the temporary prompt and the admin's submitted URL only
+        # after the URL is saved and the order card has been refreshed.
+        for temporary_message_id in (tracking_pending.get("prompt_id"), message.message_id):
+            if not temporary_message_id:
+                continue
+            try:
+                await context.bot.delete_message(
+                    chat_id=message.chat_id,
+                    message_id=temporary_message_id,
+                )
+            except BadRequest as exc:
+                log.info(
+                    "Temporary Grab tracking message could not be deleted: chat_id=%s message_id=%s error=%s",
+                    message.chat_id, temporary_message_id, exc,
+                )
         return
 
     pending = context.chat_data.get("pending_grab_reference")
