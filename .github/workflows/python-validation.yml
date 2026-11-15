@@ -8,6 +8,7 @@ on:
     branches:
       - checkpoint/pytka-6
       - fix/pytka6-audit-hardening
+      - feature/admin-order-editing
 
 jobs:
   syntax:

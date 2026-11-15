@@ -1,6 +1,9 @@
 import logging
 import os
 import sqlite3
+import re
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
@@ -11,6 +14,30 @@ DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 
 DELIVERY_ACTIONS = {"grab_requested", "picked_up", "payment_received", "delivered"}
+VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+# Keep these values aligned with the live Mini App catalog in bot.py.
+EDITABLE_CATALOG = {
+    "Сет Энергия": 170000,
+    "Сет Атлантика": 170000,
+    "Сет Комфорт": 170000,
+    "Сет Характер": 170000,
+    "Гречка с грибами": 40000,
+    "Рис с овощами": 40000,
+    "Картофельное пюре": 40000,
+    "Куриная грудка": 70000,
+    "Лосось": 80000,
+    "Филе лосося": 80000,
+    "Домашние котлеты (2 шт.)": 75000,
+    "Куриное бедро": 70000,
+    "Овощной салат": 50000,
+    "Салат «Свежесть»": 50000,
+    "Витаминный салат": 50000,
+    "Омлет": 15000,
+    "Яйцо отварное": 15000,
+    "Морс": 15000,
+    "Багет": 15000,
+}
 
 
 def db_connect():
@@ -77,6 +104,46 @@ def _order_text(order):
     ).replace(",", ".")
 
 
+def _order_edit_keyboard(order_id):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👤 Имя", callback_data=f"adm:edit:{order_id}:customer_name"),
+         InlineKeyboardButton("📱 Телефон", callback_data=f"adm:edit:{order_id}:phone")],
+        [InlineKeyboardButton("📍 Адрес", callback_data=f"adm:edit:{order_id}:address"),
+         InlineKeyboardButton("📅 Дата", callback_data=f"adm:edit:{order_id}:delivery_date")],
+        [InlineKeyboardButton("🍱 Состав и сумма", callback_data=f"adm:edit:{order_id}:items"),
+         InlineKeyboardButton("💬 Комментарий", callback_data=f"adm:edit:{order_id}:comment")],
+        [InlineKeyboardButton("⬅️ К заказу", callback_data=f"adm:order:{order_id}")],
+    ])
+
+
+def _parse_edited_items(raw_text):
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+    if not lines or len(lines) > len(EDITABLE_CATALOG):
+        raise ValueError("Укажите от 1 до 19 позиций, каждая с новой строки.")
+    normalized = {name.casefold(): (name, price) for name, price in EDITABLE_CATALOG.items()}
+    normalized["котлеты"] = ("Домашние котлеты (2 шт.)", 75000)
+    result = []
+    seen = set()
+    total = 0
+    for line in lines:
+        match = re.fullmatch(r"(.+?)\s*[x×]\s*(\d+)", line, flags=re.IGNORECASE)
+        if not match:
+            raise ValueError("Формат строки: Название × количество.")
+        requested_name = match.group(1).strip().casefold()
+        quantity = int(match.group(2))
+        if requested_name not in normalized:
+            raise ValueError(f"Не нашёл позицию «{match.group(1).strip()}». Проверьте название.")
+        name, unit_price = normalized[requested_name]
+        if name in seen:
+            raise ValueError(f"Позиция «{name}» указана дважды. Объедините количество в одной строке.")
+        if not 1 <= quantity <= 100:
+            raise ValueError("Количество каждой позиции должно быть от 1 до 100.")
+        seen.add(name)
+        result.append(f"{name} × {quantity}")
+        total += unit_price * quantity
+    return ", ".join(result), total
+
+
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
@@ -93,6 +160,8 @@ def _order_keyboard(order):
         ]
         if row:
             rows.append(row)
+    if order["status"] not in {"delivered", "cancelled"}:
+        rows.append([InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")])
     rows.extend([
         [InlineKeyboardButton("🧾 Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
         [InlineKeyboardButton("🚚 Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
@@ -111,10 +180,53 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Нет доступа.", show_alert=True)
         return
     parts = q.data.split(":")
-    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference"}:
+    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference", "edit"}:
+        return
+
+    if parts[1] == "edit":
+        context.chat_data.pop("pending_grab_reference", None)
+        order_id = int(parts[2])
+        order = _get_order(order_id)
+        if not order:
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        if order["status"] in {"delivered", "cancelled"}:
+            await q.answer("Доставленный или отменённый заказ нельзя редактировать.", show_alert=True)
+            return
+        if len(parts) == 3:
+            await q.edit_message_text(
+                "✏️ *ИЗМЕНЕНИЕ ЗАКАЗА №" + str(order_id) + "*\n\nВыберите, что нужно исправить:",
+                parse_mode="Markdown",
+                reply_markup=_order_edit_keyboard(order_id),
+            )
+            await q.answer()
+            return
+        field = parts[3]
+        prompts = {
+            "customer_name": ("имя клиента", "Введите новое имя (2–80 символов)."),
+            "phone": ("телефон", "Введите новый телефон (7–30 символов)."),
+            "address": ("адрес доставки", "Введите новый адрес (5–400 символов)."),
+            "delivery_date": ("дату доставки", "Введите дату в формате ГГГГ-ММ-ДД. Например: 2026-11-20."),
+            "comment": ("комментарий", "Введите новый комментарий (до 500 символов). Чтобы очистить, отправьте —."),
+            "items": ("состав и сумму", "Отправьте каждую позицию с новой строки в формате Название × количество.\n\nДоступные позиции:\n" + "\n".join(f"• {name} — {price:,} ₫".replace(",", ".") for name, price in EDITABLE_CATALOG.items())),
+        }
+        if field not in prompts:
+            await q.answer("Неизвестное поле.", show_alert=True)
+            return
+        label, prompt_text = prompts[field]
+        prompt = await q.message.reply_text(
+            f"✏️ Изменяем {label} заказа №{order_id}.\n\n{prompt_text}\n\nОтветьте именно на это сообщение."
+        )
+        context.chat_data["pending_order_edit"] = {
+            "order_id": order_id,
+            "field": field,
+            "prompt_id": prompt.message_id,
+        }
+        await q.answer("Жду новые данные")
         return
 
     if parts[1] == "reference":
+        context.chat_data.pop("pending_order_edit", None)
         order_id = int(parts[2])
         if not _get_order(order_id):
             await q.answer("Заказ не найден.", show_alert=True)
@@ -253,6 +365,93 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Этот статус уже установлен.")
         return
     await q.answer("Обновлено")
+
+
+async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Validate and save one administrator-entered order edit."""
+    message = update.effective_message
+    if not _admin_only(update) or not message or not message.reply_to_message:
+        return
+    pending = context.chat_data.get("pending_order_edit")
+    if not pending or message.reply_to_message.message_id != pending["prompt_id"]:
+        return
+    order_id = pending["order_id"]
+    field = pending["field"]
+    order = _get_order(order_id)
+    if not order or order["status"] in {"delivered", "cancelled"}:
+        context.chat_data.pop("pending_order_edit", None)
+        await message.reply_text("Заказ уже недоступен для редактирования.")
+        return
+
+    raw = (message.text or "").strip()
+    updates = {}
+    try:
+        if field == "customer_name":
+            if not 2 <= len(raw) <= 80:
+                raise ValueError("Имя должно содержать от 2 до 80 символов.")
+            updates[field] = raw
+            customer_notice = f"Имя: {raw}"
+        elif field == "phone":
+            if not 7 <= len(raw) <= 30:
+                raise ValueError("Телефон должен содержать от 7 до 30 символов.")
+            updates[field] = raw
+            customer_notice = f"Телефон: {raw}"
+        elif field == "address":
+            if not 5 <= len(raw) <= 400:
+                raise ValueError("Адрес должен содержать от 5 до 400 символов.")
+            updates[field] = raw
+            customer_notice = f"Адрес доставки: {raw}"
+        elif field == "delivery_date":
+            try:
+                parsed_date = date.fromisoformat(raw)
+            except ValueError as exc:
+                raise ValueError("Неверная дата. Используйте формат ГГГГ-ММ-ДД.") from exc
+            if parsed_date < datetime.now(VN_TZ).date():
+                raise ValueError("Нельзя указать дату в прошлом.")
+            updates[field] = raw
+            customer_notice = f"Дата доставки: {raw}"
+        elif field == "comment":
+            if raw == "—":
+                raw = ""
+            if len(raw) > 500:
+                raise ValueError("Комментарий должен быть не длиннее 500 символов.")
+            updates[field] = raw
+            customer_notice = f"Комментарий: {raw or 'удалён'}"
+        elif field == "items":
+            items_text, total = _parse_edited_items(raw)
+            updates["items_text"] = items_text
+            updates["total"] = total
+            customer_notice = f"Новый состав: {items_text}\nНовая сумма: {total:,} ₫".replace(",", ".")
+        else:
+            raise ValueError("Неизвестное поле.")
+    except ValueError as exc:
+        await message.reply_text(f"⚠️ {exc}\nПопробуйте ещё раз, ответив на исходное сообщение.")
+        return
+
+    allowed_columns = {"customer_name", "phone", "address", "delivery_date", "comment", "items_text", "total"}
+    if not updates or any(column not in allowed_columns for column in updates):
+        await message.reply_text("Не удалось сохранить изменение.")
+        return
+    with db_connect() as conn:
+        assignments = ", ".join(f"{column} = ?" for column in updates)
+        conn.execute(
+            f"UPDATE orders SET {assignments} WHERE id = ?",
+            (*updates.values(), order_id),
+        )
+    context.chat_data.pop("pending_order_edit", None)
+    if order["customer_chat_id"]:
+        try:
+            await context.bot.send_message(
+                chat_id=order["customer_chat_id"],
+                text=f"ℹ️ Заказ BEAR MODE №{order_id} обновлён.\n{customer_notice}",
+            )
+        except Exception:
+            log.exception("Could not notify customer about edited order %s", order_id)
+    updated = _get_order(order_id)
+    await message.reply_text(
+        f"✅ Заказ №{order_id} обновлён.\n\n{_order_text(updated)}",
+        reply_markup=_order_keyboard(updated),
+    )
 
 
 async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
