@@ -1294,6 +1294,15 @@ async def main():
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
     await app.initialize()
+    # Set the Mini App as the default menu button for all private chats.
+    # Individual /start calls also set the same button for that specific chat.
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261115-5"
+    await app.bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="Магазин",
+            web_app=WebAppInfo(url=shop_url),
+        ),
+    )
     # Ensure Telegram is not holding updates for a webhook while this bot uses polling.
     await app.bot.delete_webhook(drop_pending_updates=False)
     print("BEAR MODE: webhook cleared; pending updates preserved.", flush=True)
