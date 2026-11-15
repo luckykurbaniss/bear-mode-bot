@@ -257,14 +257,16 @@ def remove_shop_reminder_ids(chat_id, message_ids=None):
             )
 
 
-def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total):
+def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method="cash"):
+    if payment_method not in {"cash", "qr"}:
+        raise ValueError("Invalid payment method")
     with db_connect() as conn:
         cur = conn.execute(
             """INSERT INTO orders
-            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')""",
+            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?)""",
             (datetime.now(VN_TZ).isoformat(timespec="seconds"), customer_chat_id,
-             customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total)
+             customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method)
         )
         return cur.lastrowid
 
@@ -883,7 +885,8 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
 
         order_id = save_order(
             user.id if user else None, customer_name, phone, address,
-            delivery_date, "", (f"Способ оплаты: {payment_label}. " + comment).strip(), ", ".join(saved_items), total
+            delivery_date, "", comment, ", ".join(saved_items), total,
+            payment_method=payment_method
         )
         admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
         try:
