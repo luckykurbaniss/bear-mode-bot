@@ -665,7 +665,7 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
         elif data == "delivery":
             await q.edit_message_text(
                 "🚚 *Доставка BEAR MODE*\n\n"
-                "Доставляем заказы по Нячангу. После получения адреса и даты подтвердим возможность доставки, её стоимость и время.\n\n"
+                "Доставка по Нячангу — 30.000 ₫. Время доставки согласуем после получения адреса и даты.\n\n"
                 "Оформить заказ можно через кнопку «🛒 Открыть магазин» внизу чата.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
