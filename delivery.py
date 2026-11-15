@@ -188,7 +188,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton(("✅ " if order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
         [InlineKeyboardButton(("✅ " if order["status"] == "delivered" else "🎉 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
-        *([[InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")]] if order["status"] not in {"delivered", "cancelled"} else []),
+        [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
         support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
@@ -198,6 +198,7 @@ def _order_keyboard(order):
 def _order_edit_keyboard(order_id):
     """Build the field selector shown after the administrator taps Edit order."""
     fields = [
+        ("🔄 Изменить статус", "status"),
         ("👤 Имя клиента", "customer_name"),
         ("📱 Телефон", "phone"),
         ("📍 Адрес доставки", "address"),
@@ -214,6 +215,31 @@ def _order_edit_keyboard(order_id):
     ])
     rows.append([
         InlineKeyboardButton("⬅️ Назад к заказу", callback_data=f"adm:order:{order_id}")
+    ])
+    return InlineKeyboardMarkup(rows)
+
+
+def _order_status_keyboard(order):
+    """Show every order status; the current status is marked and cannot be reselected."""
+    statuses = [
+        ("🆕 Новый", "new"),
+        ("🤝 Подтверждён", "confirmed"),
+        ("🍳 Готовится", "cooking"),
+        ("🛵 Передан курьеру", "courier"),
+        ("🎉 Доставлен", "delivered"),
+        ("❌ Отменён", "cancelled"),
+    ]
+    rows = []
+    for label, status in statuses:
+        prefix = "✅ " if order["status"] == status else ""
+        rows.append([
+            InlineKeyboardButton(
+                prefix + label,
+                callback_data=f"adm:edit:{order['id']}:status:{status}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton("⬅️ Назад к изменению заказа", callback_data=f"adm:edit:{order['id']}")
     ])
     return InlineKeyboardMarkup(rows)
 
@@ -235,9 +261,6 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if not order:
             await q.answer("Заказ не найден.", show_alert=True)
             return
-        if order["status"] in {"delivered", "cancelled"}:
-            await q.answer("Доставленный или отменённый заказ нельзя редактировать.", show_alert=True)
-            return
         if len(parts) == 3:
             await q.edit_message_text(
                 "✏️ *ИЗМЕНЕНИЕ ЗАКАЗА №" + str(order_id) + "*\n\nВыберите, что нужно исправить:",
@@ -247,6 +270,49 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer()
             return
         field = parts[3]
+        if field == "status":
+            if order["status"] in {"delivered", "cancelled"} and len(parts) == 4:
+                pass
+            if len(parts) == 4:
+                await q.edit_message_text(
+                    "🔄 *ИЗМЕНЕНИЕ СТАТУСА ЗАКАЗА №" + str(order_id) + "*\\n\\nВыберите новый статус:",
+                    parse_mode="Markdown",
+                    reply_markup=_order_status_keyboard(order),
+                )
+                await q.answer()
+                return
+            if len(parts) != 5:
+                await q.answer("Некорректный статус.", show_alert=True)
+                return
+            new_status = parts[4]
+            status_messages = {
+                "new": "Ваш заказ снова отмечен как новый. Мы скоро свяжемся с вами.",
+                "confirmed": "Ваш заказ подтверждён! Спасибо.",
+                "cooking": "🍳 Ваш заказ уже готовится на кухне.",
+                "courier": "Ваш заказ отмечен как переданный курьеру.",
+                "delivered": "Ваш заказ отмечен как доставленный. Приятного аппетита!",
+                "cancelled": "❌ К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+            }
+            if new_status not in status_messages:
+                await q.answer("Неизвестный статус.", show_alert=True)
+                return
+            if new_status == order["status"]:
+                await q.answer("Этот статус уже установлен.", show_alert=True)
+                return
+            _set_value(order_id, "status", new_status)
+            customer_chat_id = order["customer_chat_id"] if "customer_chat_id" in order.keys() else None
+            if customer_chat_id:
+                try:
+                    await context.bot.send_message(chat_id=customer_chat_id, text=status_messages[new_status])
+                except Exception:
+                    log.exception("Could not notify customer about manual status change for order %s", order_id)
+            updated = _get_order(order_id)
+            await q.edit_message_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+            await q.answer("Статус заказа изменён")
+            return
+        if order["status"] in {"delivered", "cancelled"}:
+            await q.answer("Данные доставленного или отменённого заказа менять нельзя. Изменить можно только статус.", show_alert=True)
+            return
         if field == "cancelled":
             if order["status"] not in {"new", "confirmed", "cooking"}:
                 await q.answer("Заказ на этом этапе уже нельзя отменить из панели.", show_alert=True)
