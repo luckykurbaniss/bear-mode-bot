@@ -111,6 +111,7 @@ const dishes=[
 ];
 const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
 const CART_STORAGE_KEY='bear_mode_cart_v1';
+const DELIVERY_FEE=30000;
 const cart=(()=>{try{const saved=JSON.parse(localStorage.getItem(CART_STORAGE_KEY)||'{}');return saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:{}}catch(_){return {}}})();
 const $=id=>document.getElementById(id),money=n=>new Intl.NumberFormat('ru-RU').format(n).replace(/[\u00a0\u202f]/g,'.')+' ₫';
 function saveCart(){try{localStorage.setItem(CART_STORAGE_KEY,JSON.stringify(cart))}catch(err){console.warn('Could not save cart:',err)}}
@@ -124,9 +125,9 @@ function update(){
  // Keep basket contents when the Telegram Mini App is closed and reopened.
  for(const key of Object.keys(cart)){if(!catalog.some(x=>x.id===key)||!Number.isInteger(Number(cart[key]))||Number(cart[key])<1)delete cart[key];else cart[key]=Number(cart[key])}
  saveCart();
- const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0);
- $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(sum);if($('qrAmount'))$('qrAmount').textContent=money(sum);
- $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join(''):'<div class="note">Корзина пока пуста.</div>';
+ const entries=catalog.filter(x=>cart[x.id]),n=entries.reduce((a,x)=>a+cart[x.id],0),sum=entries.reduce((a,x)=>a+x.price*cart[x.id],0),grandTotal=sum+DELIVERY_FEE;
+ $('count').textContent=n;$('summary').textContent=n?`${n} поз. · ${money(sum)}`:'Пока ничего не выбрано';$('total').textContent=money(grandTotal);if($('qrAmount'))$('qrAmount').textContent=money(grandTotal);
+ $('cartItems').innerHTML=n?entries.map(x=>`<div class="row"><div><b>${x.name}</b><br><span class="note">${money(x.price)} / порция</span></div><div class="qty"><button type="button" onclick="change('${x.id}',-1)">−</button><b>${cart[x.id]}</b><button type="button" onclick="change('${x.id}',1)">＋</button></div></div>`).join('')+`<div class="row"><b>🚚 Доставка</b><b>${money(DELIVERY_FEE)}</b></div>`:'<div class="note">Корзина пока пуста.</div>';
 }
 const imageViewer=$('imageViewer'),imageViewerImg=$('imageViewerImg');
 function openImage(img){imageViewerImg.src=img.currentSrc||img.src;imageViewerImg.alt=img.alt||'';imageViewer.classList.add('show')}
