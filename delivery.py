@@ -31,6 +31,33 @@ def is_order_transition_allowed(current_status: str, next_status: str) -> bool:
     """Return whether an order status may move to the requested next status."""
     return next_status in ORDER_STATUS_TRANSITIONS.get(current_status, set())
 
+
+def _manual_status_transition_allowed(order, next_status: str) -> bool:
+    """Allow backward corrections, but only one forward lifecycle step at a time."""
+    current = order["status"]
+    if next_status == current:
+        return False
+    if next_status == "cancelled":
+        return current in {"new", "confirmed", "cooking"}
+    if current == "cancelled":
+        return next_status == "new"
+    ranks = {"new": 0, "confirmed": 1, "cooking": 2, "courier": 3, "delivered": 4}
+    if current not in ranks or next_status not in ranks:
+        return False
+    if ranks[next_status] < ranks[current]:
+        return True
+    if ranks[next_status] != ranks[current] + 1:
+        return False
+    if next_status == "courier":
+        return (
+            bool(order["grab_reference"])
+            and order["grab_status"] == "picked_up"
+            and order["payment_status"] == "received"
+        )
+    if next_status == "delivered":
+        return bool(order["grab_tracking_url"]) and order["grab_status"] == "picked_up"
+    return True
+
 # Keep these values aligned with the live Mini App catalog in bot.py.
 EDITABLE_CATALOG = {
     "Сет Энергия": 170000,
@@ -322,6 +349,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             if new_status == order["status"]:
                 await q.answer("Этот статус уже установлен.", show_alert=True)
                 return
+            if not _manual_status_transition_allowed(order, new_status):
+                await q.answer("Нельзя пропустить этап. Сначала выполните предыдущие действия или вернитесь на предыдущий статус.", show_alert=True)
+                return
             _set_value(order_id, "status", new_status)
             # Manual status corrections are silent: update admin state only.
             updated = _get_order(order_id)
@@ -387,6 +417,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if order["grab_tracking_url"]:
             await q.answer("Ссылка отслеживания уже добавлена. Повторно изменить её нельзя.", show_alert=True)
             return
+        if order["grab_status"] != "picked_up" or order["status"] != "courier":
+            await q.answer("Сначала отметьте «Курьер забрал». После этого добавьте ссылку отслеживания.", show_alert=True)
+            return
         # A new tracking-link request supersedes any stale Grab ID request.
         context.chat_data.pop("pending_grab_reference", None)
         prompt = await q.message.reply_text(
@@ -409,6 +442,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             return
         if order["grab_reference"]:
             await q.answer("Grab ID уже указан. Повторно изменить его нельзя.", show_alert=True)
+            return
+        if order["status"] != "cooking":
+            await q.answer("Сначала подтвердите заказ и отметьте «Готовится».", show_alert=True)
             return
 
         # Ignore rapid repeated taps: one active Grab ID prompt per order/chat.
@@ -486,13 +522,22 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer("Это действие уже выполнено.")
             return
         if action == "grab_requested":
+            if not order["grab_reference"]:
+                await q.answer("Сначала укажите Grab ID.", show_alert=True)
+                return
             if current_grab != "not_requested":
                 await q.answer("Grab уже был вызван или курьер забрал заказ.", show_alert=True)
                 return
             if order["status"] not in {"confirmed", "cooking"}:
                 await q.answer("Сначала подтвердите заказ и подготовьте его к передаче курьеру.", show_alert=True)
                 return
+        if action == "payment_received" and current_grab != "requested":
+            await q.answer("Сначала вызовите Grab.", show_alert=True)
+            return
         if action == "picked_up":
+            if order["payment_status"] != "received":
+                await q.answer("Сначала отметьте «Деньги получены».", show_alert=True)
+                return
             if current_grab != "requested":
                 await q.answer("Сначала отметьте, что Grab вызван.", show_alert=True)
                 return
@@ -503,6 +548,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             current_grab == "picked_up" or order["status"] == "courier"
         ):
             await q.answer("Сначала отметьте, что курьер забрал заказ.", show_alert=True)
+            return
+        if action == "delivered" and not order["grab_tracking_url"]:
+            await q.answer("Сначала добавьте ссылку отслеживания Grab.", show_alert=True)
             return
 
     if parts[1] == "set":
@@ -571,6 +619,10 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
         if not tracking_order:
             context.chat_data.pop("pending_grab_tracking", None)
             await message.reply_text("Заказ не найден. Откройте его заново в панели.")
+            return
+        if tracking_order["grab_status"] != "picked_up" or tracking_order["status"] != "courier":
+            context.chat_data.pop("pending_grab_tracking", None)
+            await message.reply_text("Сначала отметьте «Курьер забрал». После этого можно добавить ссылку отслеживания.")
             return
         if tracking_order["grab_tracking_url"]:
             context.chat_data.pop("pending_grab_tracking", None)
@@ -653,6 +705,10 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     if not order:
         context.chat_data.pop("pending_grab_reference", None)
         await message.reply_text("Заказ не найден. Откройте его заново в панели.")
+        return
+    if order["status"] != "cooking":
+        context.chat_data.pop("pending_grab_reference", None)
+        await message.reply_text("Сначала подтвердите заказ и отметьте «Готовится», затем укажите Grab ID.")
         return
     if order["grab_reference"]:
         context.chat_data.pop("pending_grab_reference", None)
