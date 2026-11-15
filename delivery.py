@@ -166,29 +166,29 @@ def _parse_edited_items(raw_text):
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
-    # Keep the cooking checkmark after the order advances to courier/delivered.
-    # These statuses mean the cooking stage has already been completed.
-    cooking_stage_reached = order["status"] in {"cooking", "courier", "delivered"}
+    # A cancelled order is visually reset: hide every completed-stage checkmark.
+    # Keep the underlying order data intact so it can be restored if status is corrected.
+    show_progress = order["status"] != "cancelled"
+    cooking_stage_reached = show_progress and order["status"] in {"cooking", "courier", "delivered"}
     status_buttons = [
         ("✅ Готовится" if cooking_stage_reached else "🍳 Готовится", "cooking")
     ]
-    available_statuses = status_buttons
-    for start in range(0, len(available_statuses), 2):
+    for start in range(0, len(status_buttons), 2):
         row = [
             InlineKeyboardButton(
                 label,
                 callback_data=f"adm:set:{order_id}:{status}",
             )
-            for label, status in available_statuses[start:start + 2]
+            for label, status in status_buttons[start:start + 2]
         ]
         rows.append(row)
     rows.extend([
-        [InlineKeyboardButton(("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
-        [InlineKeyboardButton(("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
-        [InlineKeyboardButton(("✅ " if order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
-        [InlineKeyboardButton(("✅ " if order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
-        [InlineKeyboardButton(("✅ " if order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
-        [InlineKeyboardButton(("✅ " if order["status"] == "delivered" else "🎉 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
+        [InlineKeyboardButton(("✅ " if show_progress and order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
+        [InlineKeyboardButton(("✅ " if show_progress and order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
+        [InlineKeyboardButton(("✅ " if show_progress and order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
+        [InlineKeyboardButton(("✅ " if show_progress and (order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"}) else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
+        [InlineKeyboardButton(("✅ " if show_progress and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
+        [InlineKeyboardButton(("✅ " if show_progress and order["status"] == "delivered" else "🎉 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
         [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
         support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
