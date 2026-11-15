@@ -271,7 +271,10 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("support_edit_mode", None)
         if action == "close":
             context.user_data.pop("support_target", None)
-        await q.edit_message_text("Действие отменено.")
+        try:
+            await q.message.delete()
+        except Exception:
+            log.exception("Could not delete cancelled customer-message draft")
         await q.answer()
         return
 
