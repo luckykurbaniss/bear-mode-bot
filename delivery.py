@@ -95,8 +95,7 @@ def _order_keyboard(order):
     rows = []
     status_buttons = [
         ("🆕 Новый", "new"), ("✅ Подтверждён", "confirmed"),
-        ("👨‍🍳 Готовится", "cooking"), ("🛵 Курьеру", "courier"),
-        ("🎉 Доставлен", "delivered"), ("❌ Отменён", "cancelled"),
+        ("👨‍🍳 Готовится", "cooking"), ("❌ Отменён", "cancelled"),
     ]
     for start in range(0, len(status_buttons), 2):
         row = [
@@ -111,6 +110,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton("🚚 Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
         [InlineKeyboardButton("🛵 Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton("💵 Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
+        [InlineKeyboardButton("🎉 Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
     return InlineKeyboardMarkup(rows)
