@@ -487,7 +487,6 @@ SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
 def main_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
         [InlineKeyboardButton("📦 Как работает доставка", callback_data="delivery")],
         [InlineKeyboardButton("☎️ Связаться", callback_data="contact")],
     ])
@@ -541,7 +540,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            reply_markup=main_keyboard()
         )
         sent_ids.append(msg.message_id)
         context.chat_data["start_message_ids"] = sent_ids
@@ -643,8 +643,8 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
     if data == "home":
         context.user_data.clear()
         await q.edit_message_text(
-            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
-            parse_mode="Markdown", reply_markup=main_keyboard()
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
+            reply_markup=main_keyboard()
         )
         await set_shop_hint_visibility(context, True, q.message.chat_id, generation)
         await remove_catalog_prompt(context)
@@ -659,11 +659,10 @@ async def _menu_callback_locked(update: Update, context: ContextTypes.DEFAULT_TY
         elif data == "delivery":
             await q.edit_message_text(
                 "🚚 *Доставка BEAR MODE*\n\n"
-                "Доставка по Нячангу. Стоимость и время доставки подтвердим после получения адреса.\n"
-                "Нажми «Выбрать сет», чтобы оформить заказ.",
+                "Доставляем заказы по Нячангу. После получения адреса и даты подтвердим возможность доставки, её стоимость и время.\n\n"
+                "Оформить заказ можно через кнопку «🛒 Открыть магазин» внизу чата.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🍱 Выбрать сет", callback_data="catalog")],
                     [InlineKeyboardButton("⬅️ В главное меню", callback_data="home")]
                 ])
             )
@@ -1206,6 +1205,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
+    app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(delivery|contact|home)$"))
     app.add_error_handler(telegram_error_handler)
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
