@@ -99,6 +99,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton("🛵 Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton("💵 Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
         [InlineKeyboardButton("🎉 Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
+        [InlineKeyboardButton("💬 Ответить клиенту", callback_data=f"support:order:{order_id}")],
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
     return InlineKeyboardMarkup(rows)
