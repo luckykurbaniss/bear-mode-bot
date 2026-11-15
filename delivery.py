@@ -112,7 +112,8 @@ def _order_text(order):
         f"📍 Адрес: {order['address']}\n"
         f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
         f"🍱 Заказ: {order['items_text']}\n"
-        f"💰 Сумма заказа: {order['total']:,} ₫\n"
+        f"🚚 Доставка: {int(order['delivery_fee'] or 0) if 'delivery_fee' in order.keys() else 0:,} ₫\n"
+        f"💰 Итого к оплате: {order['total']:,} ₫\n"
         f"💳 Способ оплаты: {payment_method_label}\n"
         f"💵 Статус оплаты: {payment_status_label}\n"
         f"💬 Комментарий: {order['comment'] or 'Нет'}\n\n"
@@ -555,8 +556,13 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
         elif field == "items":
             items_text, total = _parse_edited_items(raw)
             updates["items_text"] = items_text
-            updates["total"] = total
-            customer_notice = f"Новый состав: {items_text}\nНовая сумма: {total:,} ₫".replace(",", ".")
+            delivery_fee = int(order["delivery_fee"] or 0) if "delivery_fee" in order.keys() else 0
+            updates["total"] = total + delivery_fee
+            customer_notice = (
+                f"Новый состав: {items_text}\n"
+                f"Доставка: {delivery_fee:,} ₫\n"
+                f"Итого к оплате: {total + delivery_fee:,} ₫"
+            ).replace(",", ".")
         else:
             raise ValueError("Неизвестное поле.")
     except ValueError as exc:
