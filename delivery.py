@@ -223,7 +223,10 @@ def _order_edit_keyboard(order_id):
 
 
 def _order_status_keyboard(order):
-    """Show every order status; the current status is marked and cannot be reselected."""
+    """Show order statuses and operational stages; omit edit-order and customer-reply actions."""
+    order_id = order["id"]
+    rows = []
+
     statuses = [
         ("🆕 Новый", "new"),
         ("🤝 Подтверждён", "confirmed"),
@@ -232,17 +235,43 @@ def _order_status_keyboard(order):
         ("🎉 Доставлен", "delivered"),
         ("❌ Отменён", "cancelled"),
     ]
-    rows = []
     for label, status in statuses:
         prefix = "✅ " if order["status"] == status else ""
         rows.append([
             InlineKeyboardButton(
                 prefix + label,
-                callback_data=f"adm:edit:{order['id']}:status:{status}",
+                callback_data=f"adm:edit:{order_id}:status:{status}",
             )
         ])
+
+    show_progress = order["status"] != "cancelled"
+    operational_actions = [
+        (
+            ("✅ " if show_progress and order["grab_reference"] else "🧾 ") + "Указать Grab ID",
+            f"adm:reference:{order_id}",
+        ),
+        (
+            ("✅ " if show_progress and order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван",
+            f"adm:delivery:{order_id}:grab_requested",
+        ),
+        (
+            ("✅ " if show_progress and order["payment_status"] == "received" else "💵 ") + "Деньги получены",
+            f"adm:delivery:{order_id}:payment_received",
+        ),
+        (
+            ("✅ " if show_progress and (order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"}) else "🛵 ") + "Курьер забрал",
+            f"adm:delivery:{order_id}:picked_up",
+        ),
+        (
+            ("✅ " if show_progress and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab",
+            f"adm:tracking:{order_id}",
+        ),
+    ]
+    for label, callback_data in operational_actions:
+        rows.append([InlineKeyboardButton(label, callback_data=callback_data)])
+
     rows.append([
-        InlineKeyboardButton("⬅️ Назад к изменению заказа", callback_data=f"adm:edit:{order['id']}")
+        InlineKeyboardButton("⬅️ Назад к изменению заказа", callback_data=f"adm:edit:{order_id}")
     ])
     return InlineKeyboardMarkup(rows)
 
