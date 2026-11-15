@@ -393,7 +393,7 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     pending_order_id = pending["order_id"]
     log.info(
         "Grab ID reply matched: order_id=%s chat_id=%s prompt_message_id=%s",
-        pending_order_id, message.chat_id, reply.message_id,
+        pending_order_id, message.chat_id, reply.message_id if reply else None,
     )
     reference = (message.text or "").strip()
     if not reference or len(reference) > 120 or any(ord(ch) < 32 for ch in reference):
