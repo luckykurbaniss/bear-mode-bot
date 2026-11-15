@@ -184,7 +184,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Нет доступа.", show_alert=True)
         return
     parts = q.data.split(":")
-    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference"}:
+    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference", "edit"}:
         return
 
     if parts[1] == "edit":
