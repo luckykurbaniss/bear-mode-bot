@@ -546,6 +546,16 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     context.chat_data.pop("pending_grab_reference", None)
     updated = _get_order(pending_order_id)
     log.info("Grab ID saved successfully: order_id=%s", pending_order_id)
+    # Keep the original request visible as a durable confirmation.
+    try:
+        await context.bot.edit_message_text(
+            chat_id=message.chat_id,
+            message_id=pending["prompt_id"],
+            text=f"✅ Grab ID для заказа №{pending_order_id} сохранён: {reference}",
+        )
+    except BadRequest as exc:
+        log.warning("Could not turn Grab ID prompt into confirmation: %s", exc)
+        await message.reply_text(f"✅ Grab ID для заказа №{pending_order_id} сохранён: {reference}")
     order_card_message_id = pending.get("order_card_message_id")
     if order_card_message_id:
         try:
