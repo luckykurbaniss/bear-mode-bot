@@ -119,6 +119,21 @@ def _customer_order_confirmation_keyboard(order_id):
     ])
 
 
+async def send_order_welcome(bot, order_id):
+    """Send the matching ready-made welcome template with order decision buttons."""
+    order = _order(order_id)
+    if not order or not order["customer_chat_id"]:
+        log.warning("Cannot send order welcome: order %s has no customer chat", order_id)
+        return
+    template_id = "welcome_confirm_qr" if order["payment_method"] == "qr" else "welcome_confirm"
+    await bot.send_message(
+        chat_id=int(order["customer_chat_id"]),
+        text=_format_template(template_id, order),
+        reply_markup=_customer_order_confirmation_keyboard(int(order_id)),
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
+
+
 async def customer_order_confirmation_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     parts = q.data.split(":")
