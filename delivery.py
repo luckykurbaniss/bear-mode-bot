@@ -254,24 +254,37 @@ def _order_status_keyboard(order):
     order_id = order["id"]
     rows = []
 
+    # Match every checkmark to the main order card exactly.
+    show_progress = order["status"] != "cancelled"
+    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "courier", "delivered"}
+    cooking_stage_reached = show_progress and order["status"] in {"cooking", "courier", "delivered"}
+    courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
     statuses = [
-        ("🆕 Новый", "new"),
-        ("🤝 Подтверждён", "confirmed"),
-        ("🍳 Готовится", "cooking"),
-        ("🛵 Передан курьеру", "courier"),
-        ("🎉 Доставлен", "delivered"),
-        ("❌ Отменён", "cancelled"),
+        ("🆕 Новый", "new", order["status"] == "new"),
+        ("Подтверждён", "confirmed", confirmed_stage_reached),
+        ("Готовится", "cooking", cooking_stage_reached),
+        ("Передан курьеру", "courier", courier_stage_reached),
+        ("Доставлен", "delivered", show_progress and order["status"] == "delivered"),
+        ("❌ Отменён", "cancelled", order["status"] == "cancelled"),
     ]
-    for label, status in statuses:
-        prefix = "✅ " if order["status"] == status else ""
+    for label, status, completed in statuses:
+        if status == "confirmed":
+            label = ("✅ " if completed else "🤝 ") + label
+        elif status == "cooking":
+            label = ("✅ " if completed else "🍳 ") + label
+        elif status == "courier":
+            label = ("✅ " if completed else "🛵 ") + label
+        elif status == "delivered":
+            label = ("✅ " if completed else "🎉 ") + label
+        elif status == "new" and completed:
+            label = "✅ " + label
         rows.append([
             InlineKeyboardButton(
-                prefix + label,
+                label,
                 callback_data=f"adm:edit:{order_id}:status:{status}",
             )
         ])
 
-    show_progress = order["status"] != "cancelled"
     operational_actions = [
         (
             ("✅ " if show_progress and order["grab_reference"] else "🧾 ") + "Указать Grab ID",
@@ -286,7 +299,7 @@ def _order_status_keyboard(order):
             f"adm:delivery:{order_id}:payment_received",
         ),
         (
-            ("✅ " if show_progress and (order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"}) else "🛵 ") + "Курьер забрал",
+            ("✅ " if courier_stage_reached or (show_progress and order["grab_status"] in {"picked_up", "delivered"}) else "🛵 ") + "Курьер забрал",
             f"adm:delivery:{order_id}:picked_up",
         ),
         (
