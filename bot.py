@@ -877,7 +877,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
-        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
+        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 1000 or len(comment) > 500:
             raise ValueError("One or more customer fields are too long")
         try:
             requested_date = date.fromisoformat(delivery_date)
@@ -1033,7 +1033,7 @@ async def order_api(request):
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Заполните имя, телефон, адрес и дату доставки.")
-        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 400 or len(comment) > 500:
+        if len(customer_name) > 80 or len(phone) > 30 or len(address) > 1000 or len(comment) > 500:
             raise ValueError("Слишком длинные данные.")
         requested_date = date.fromisoformat(delivery_date)
         if requested_date < datetime.now(VN_TZ).date():
