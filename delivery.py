@@ -27,6 +27,7 @@ def init_delivery_db():
             "grab_status": "TEXT NOT NULL DEFAULT 'not_requested'",
             "grab_reference": "TEXT",
             "payment_status": "TEXT NOT NULL DEFAULT 'unpaid'",
+            "payment_method": "TEXT NOT NULL DEFAULT 'cash'",
         }
         for name, definition in additions.items():
             if name not in columns:
@@ -60,20 +61,32 @@ def _order_text(order):
         "picked_up": "Курьер забрал", "delivered": "Доставлен",
     }.get(order["grab_status"] or "not_requested", "Неизвестно")
     payment_status = "Получена" if order["payment_status"] == "received" else "Ожидается"
+    payment_method = order["payment_method"] if "payment_method" in order.keys() else "cash"
+    payment_method_label = (
+        "Перевод по QR-коду Vietcombank" if payment_method == "qr"
+        else "Наличные при получении"
+    )
+    payment_status_label = (
+        "Клиент отметил оплату — проверить поступление"
+        if payment_method == "qr" and order["payment_status"] != "received"
+        else ("Оплачено / получено" if order["payment_status"] == "received"
+              else ("Ожидается при получении" if payment_method == "cash" else payment_status))
+    )
     return (
-        f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\n\n"
-        f"📌 Статус заказа: {order_status}\n"
-        f"🕒 Создан: {order['created_at']}\n"
-        f"👤 Имя: {order['customer_name']}\n"
-        f"📱 Телефон: {order['phone']}\n"
-        f"📍 Адрес: {order['address']}\n"
-        f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
-        f"🍱 Заказ: {order['items_text']}\n"
-        f"💰 Сумма заказа / COD: {order['total']:,} ₫\n"
-        f"💬 Комментарий: {order['comment'] or 'Нет'}\n\n"
-        f"🚚 GrabExpress: {grab_status}\n"
-        f"🧾 Grab ID: {order['grab_reference'] or 'не указан'}\n"
-        f"💵 Наличные COD: {payment_status}"
+        f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\\n\\n"
+        f"📌 Статус заказа: {order_status}\\n"
+        f"🕒 Создан: {order['created_at']}\\n"
+        f"👤 Имя: {order['customer_name']}\\n"
+        f"📱 Телефон: {order['phone']}\\n"
+        f"📍 Адрес: {order['address']}\\n"
+        f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\\n"
+        f"🍱 Заказ: {order['items_text']}\\n"
+        f"💰 Сумма заказа: {order['total']:,} ₫\\n"
+        f"💳 Способ оплаты: {payment_method_label}\\n"
+        f"💵 Статус оплаты: {payment_status_label}\\n"
+        f"💬 Комментарий: {order['comment'] or 'Нет'}\\n\\n"
+        f"🚚 GrabExpress: {grab_status}\\n"
+        f"🧾 Grab ID: {order['grab_reference'] or 'не указан'}"
     ).replace(",", ".")
 
 
