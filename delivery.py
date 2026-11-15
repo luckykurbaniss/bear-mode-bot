@@ -186,8 +186,6 @@ def _order_keyboard(order):
             for label, status in available_statuses[start:start + 2]
         ]
         rows.append(row)
-    if order["status"] not in {"delivered", "cancelled"}:
-        rows.append([InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")])
     rows.extend([
         [InlineKeyboardButton(("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
@@ -195,6 +193,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"picked_up", "delivered"} or order["status"] in {"courier", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton(("✅ " if order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
         [InlineKeyboardButton(("✅ " if order["status"] == "delivered" else "🎉 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
+        *([[InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")]] if order["status"] not in {"delivered", "cancelled"} else []),
         support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
