@@ -151,7 +151,7 @@ def _order_keyboard(order):
     order_id = order["id"]
     rows = []
     status_buttons = [
-        ("🆕 Новый", "new"), ("Подтверждён", "confirmed"),
+        ("Новый", "new"), ("Подтверждён", "confirmed"),
         ("Готовится", "cooking"), ("Отменён", "cancelled"),
     ]
     for start in range(0, len(status_buttons), 2):
