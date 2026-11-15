@@ -974,6 +974,20 @@ async def order_api(request):
         address = str(order.get("address", "")).strip()
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
+        payment_method = str(order.get("payment_method", "cash")).strip()
+        if payment_method not in {"cash", "qr"}:
+            raise ValueError("Некорректный способ оплаты.")
+        payment_confirmed = order.get("payment_confirmed") is True
+        if payment_method == "qr" and not payment_confirmed:
+            raise ValueError("Сначала подтвердите оплату по QR-коду или выберите наличные.")
+        payment_method_label = (
+            "Перевод по QR-коду Vietcombank" if payment_method == "qr"
+            else "Наличные при получении"
+        )
+        payment_status_label = (
+            "Клиент отметил оплату — проверить поступление"
+            if payment_method == "qr" else "Оплата при получении"
+        )
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Заполните имя, телефон, адрес и дату доставки.")
@@ -1009,13 +1023,16 @@ async def order_api(request):
             saved_items.append(f"{name} × {quantity}")
         order_id = save_order(
             int(user["id"]), customer_name, phone, address, delivery_date,
-            "", comment, ", ".join(saved_items), total
+            "", comment, ", ".join(saved_items), total,
+            payment_method=payment_method
         )
         admin_text = (
             f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
             + f"\n\n💰 ИТОГО: {total:,} ₫".replace(",", ".")
             + f"\n\n👤 Имя: {customer_name}\n📱 Телефон: {phone}"
             + f"\n📍 Адрес: {address}\n📅 Дата доставки: {delivery_date}"
+            + f"\n💳 Способ оплаты: {payment_method_label}"
+            + f"\n💰 Статус оплаты: {payment_status_label}"
             + f"\n💬 Комментарий: {comment or 'Нет'}"
             + f"\n\nTelegram клиента: {('@' + user['username']) if user.get('username') else user['id']}"
         )
