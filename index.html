@@ -18,6 +18,53 @@
 .cartbar{position:sticky;bottom:10px;margin:18px 0 0;background:linear-gradient(110deg,#f32b31,#9f1016);border:1px solid #ffb45c;border-radius:15px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 7px 25px #000b;cursor:pointer}.cartbar small{display:block;color:#ffe4cf;font-size:10px;margin-top:2px}.count{background:#ffe5a1;color:#321c0d;border-radius:99px;padding:7px 11px;font-weight:950}
 .overlay{position:fixed;inset:0;background:#000b;display:none;align-items:flex-end;z-index:10}.overlay.show{display:flex}.sheet{width:100%;max-width:850px;margin:auto;max-height:94dvh;overflow:auto;background:#171411;border:1px solid #7a482b;border-radius:22px 22px 0 0;padding:18px 16px calc(25px + env(safe-area-inset-bottom))}.sheethead{display:flex;align-items:center;justify-content:space-between}.sheethead h2{font-size:20px;margin:0}.close{width:34px;height:34px;border:0;border-radius:50%;background:#332a23;color:#fff;font-size:22px}.row{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #42352c;padding:11px 0;font-size:13px}.qty{display:flex;align-items:center;gap:8px}.qty button{width:28px;height:28px;border:0;border-radius:8px;background:#392c22;color:#ffd477;font-weight:950;font-size:17px}.total{display:flex;justify-content:space-between;font-size:18px;font-weight:950;color:var(--gold);padding:15px 0}.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.payment-options{display:grid;gap:8px}.payment-option{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #554235;border-radius:11px;background:#211c18;color:var(--cream);font-size:13px;cursor:pointer}.payment-option input{width:18px;height:18px;accent-color:var(--gold);flex:0 0 auto}.payment-option span{display:block}.payment-option small{display:block;color:var(--muted);font-size:10px;margin-top:3px}.qr-payment{display:none;margin-top:10px;padding:12px;border:1px solid #477b58;border-radius:13px;background:#f3f8ed;color:#193d2b;text-align:center}.qr-payment.show{display:block}.qr-payment img{display:block;width:min(100%,300px);height:auto;margin:10px auto;border-radius:9px}.qr-payment .qr-amount{font-size:22px;font-weight:900;color:#124d32}.qr-payment p{font-size:12px;line-height:1.45;margin:6px 0}.qr-payment .qr-account{font-weight:800}label{display:block;font-size:11px;font-weight:800;color:#e8d5bd;margin:11px 0 5px}input,textarea{width:100%;border:1px solid #554235;border-radius:10px;background:#211c18;color:#fff;padding:12px;font:inherit;font-size:14px;outline:none}input:focus,textarea:focus{border-color:var(--gold)}textarea{min-height:65px;resize:vertical}.primary{width:100%;margin-top:15px;padding:14px}.note{font-size:10px;line-height:1.45;color:#b9aa9b}.toast{display:none;position:fixed;left:14px;right:14px;bottom:20px;max-width:520px;margin:auto;background:#f6d58b;color:#24170e;padding:9px 11px;border-radius:12px;z-index:20;font-size:12px;font-weight:800;box-shadow:0 5px 20px #0009;align-items:center;gap:10px;touch-action:pan-y;transition:opacity .16s,transform .16s}.toast.show{display:flex}.toast-message{flex:1}.toast-close{border:0;background:#3b2a1a;color:#fff;border-radius:50%;width:25px;height:25px;flex:0 0 25px;font-size:17px;line-height:1;cursor:pointer}.toast.hide-swipe{opacity:0;transform:translateX(35px)}
 @media(max-width:360px){.wrap{padding:14px 10px}.cards{gap:8px}.card-body{padding:8px}.card h3{font-size:14px}.desc{font-size:9px}.ingredients{gap:6px}}
+
+/* Responsive checkout sheet: safe-area aware, centered and independently scrollable */
+.overlay{
+  position:fixed;inset:0;min-height:0;
+  display:none;align-items:center;justify-content:center;
+  padding: max(8px,env(safe-area-inset-top)) 10px max(8px,env(safe-area-inset-bottom));
+  overflow:hidden;overscroll-behavior:contain;
+}
+.overlay.show{display:flex}
+.sheet{
+  width:min(100%,640px);max-width:640px;min-width:0;
+  max-height:calc(100dvh - max(16px,env(safe-area-inset-top)) - max(16px,env(safe-area-inset-bottom)));
+  height:auto;margin:0 auto;
+  padding:clamp(14px,3.5vw,22px) clamp(12px,4vw,20px) max(16px,env(safe-area-inset-bottom));
+  border-radius:20px;overflow-x:hidden;overflow-y:auto;
+  overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable;
+}
+.sheethead{position:sticky;top:calc(-1 * clamp(14px,3.5vw,22px));z-index:2;background:#171411;padding:2px 0 10px}
+.sheethead h2{font-size:clamp(18px,4.8vw,22px);line-height:1.2}
+.close{width:40px;height:40px;flex:0 0 40px}
+.sheet #orderForm{min-width:0}
+.sheet label{font-size:clamp(12px,3.2vw,14px);line-height:1.35}
+.sheet input:not([type=radio]),.sheet textarea{min-width:0;width:100%;font-size:16px;line-height:1.4;padding:13px 14px}
+.sheet textarea{min-height:76px;max-width:100%}
+.sheet .total{gap:10px;flex-wrap:wrap;font-size:clamp(16px,4.4vw,20px);line-height:1.25}
+.sheet .total span:last-child{white-space:nowrap}
+.sheet .payment-option{min-width:0;align-items:flex-start;padding:12px}
+.sheet .payment-option span{min-width:0;overflow-wrap:anywhere}
+.sheet .note{font-size:11px;line-height:1.5}
+.sheet .primary{min-height:48px}
+@media(max-width:380px){
+  .overlay{padding-left:7px;padding-right:7px}
+  .sheet{padding-left:12px;padding-right:12px;border-radius:17px}
+  .sheet .row{gap:7px;font-size:12px}
+  .sheet .qty{gap:6px}
+  .sheet .total{font-size:16px}
+}
+@media(min-width:700px){
+  .overlay{padding:24px}
+  .sheet{max-height: min(88dvh,900px);border-radius:22px}
+}
+@media(max-height:650px){
+  .overlay{align-items:flex-start;padding-top:max(6px,env(safe-area-inset-top));padding-bottom:max(6px,env(safe-area-inset-bottom))}
+  .sheet{max-height:calc(100dvh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom));border-radius:16px}
+}
+
 </style></head><body>
 <header class="hero"><img src="assets/hero-new.jpg" alt="BEAR MODE — Еда с характером. Домашние сеты и доставка по Нячангу" fetchpriority="high" decoding="async"></header>
 <main class="wrap"><div class="special-note"><div class="special-note-main">❤️ Есть особые пожелания? Напиши их в комментарии к заказу — мы обязательно постараемся всё учесть!</div><div class="special-note-brand">BEAR MODE — готовим с заботой о каждом! 🐾</div></div><div class="intro"><div><h2>🐻 Выбирай готовый сет по вкусу</h2><p>Свежая домашняя еда — вкусно и сытно</p></div></div><section class="cards" id="products"></section>
