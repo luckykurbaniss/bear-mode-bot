@@ -101,8 +101,7 @@ def _order_keyboard(order):
     for start in range(0, len(status_buttons), 2):
         row = [
             InlineKeyboardButton(
-                ("✅ " if status == order["status"] else label + " ")
-                if status == order["status"] else label,
+                ("✅ " + label if status == order["status"] else label),
                 callback_data=f"adm:set:{order_id}:{status}",
             )
             for label, status in status_buttons[start:start + 2]
