@@ -99,30 +99,35 @@ $('toast').addEventListener('touchstart',e=>{const p=e.touches[0];toastStartX=p.
 $('toast').addEventListener('touchend',e=>{const p=e.changedTouches[0];if(Math.abs(p.clientX-toastStartX)>35||Math.abs(p.clientY-toastStartY)>35)hideToast()},{passive:true});
 $('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
 let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('date').min=local;$('date').value=local;
-$('orderForm').onsubmit=async e=>{
+let orderSubmitting=false;
+$('orderForm').onsubmit=e=>{
  e.preventDefault();
+ if(orderSubmitting)return;
  if(!Object.keys(cart).length)return toast('Корзина пуста');
- const submitButton=$('orderForm').querySelector('button[type="submit"]');
+ const form=$('orderForm');
+ if(!form.reportValidity())return;
+ const submitButton=form.querySelector('button[type="submit"]');
  if(submitButton.disabled)return;
+ if(!tg||typeof tg.sendData!=='function'){
+  toast('Открой магазин кнопкой «Открыть магазин» в чате с ботом.');
+  return;
+ }
  const order={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim(),payment_method:document.querySelector('input[name="payment_method"]:checked')?.value||'cash',payment_confirmed:qrPaymentConfirmed};
- submitButton.disabled=true;submitButton.textContent='Отправляем заказ…';
+ orderSubmitting=true;
+ submitButton.disabled=true;
+ submitButton.textContent='Передаём заказ в Telegram…';
  try{
-  // sendData works when this Mini App is launched from the Telegram reply-keyboard Web App button.
-  if(!tg||typeof tg.sendData!=='function'){
-   throw new Error('Telegram не передал функцию отправки. Закрой магазин и открой его кнопкой «Открыть магазин» в чате с ботом.');
-  }
-  // sendData does not require initData; Telegram delivers this payload as web_app_data to the bot.
+  // Telegram sendData automatically closes a reply-keyboard Mini App after dispatching web_app_data.
+  // Do not call tg.close() manually: closing immediately can race the native data hand-off.
   tg.sendData(JSON.stringify(order));
-  submitButton.textContent='Заказ отправлен! 🐼';
-  // Clear the basket only after Telegram accepted the order.
-  for(const key of Object.keys(cart))delete cart[key];
-  update();
-  toast('Заказ передан боту. Дождись подтверждения в Telegram.');
-  setTimeout(()=>tg.close(),900);
+  submitButton.textContent='Заказ передан в Telegram ✓';
+  toast('Передаём заказ боту. Подожди подтверждения в чате.');
  }catch(err){
   console.error('Order submission failed:',err);
-  submitButton.disabled=false;submitButton.textContent='🐻 Отправить заказ';
-  toast(err.message||'Не удалось отправить заказ. Напишите @lucky_ranger');
+  orderSubmitting=false;
+  submitButton.disabled=false;
+  submitButton.textContent='🐻 Отправить заказ';
+  toast(err.message||'Не удалось отправить заказ. Попробуй ещё раз.');
  }
 };
 render();update();
