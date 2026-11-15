@@ -20,6 +20,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Set up Node.js for Mini App syntax checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check Mini App JavaScript syntax
+        run: |
+          python -c "from pathlib import Path; import re; html=Path('index.html').read_text(); scripts=re.findall(r'<script>(.*?)</script>', html, re.S); assert scripts, 'No inline Mini App script found'; Path('/tmp/bear-mode-miniapp.js').write_text(scripts[-1])"
+          node --check /tmp/bear-mode-miniapp.js
       - name: Compile Python files
         run: python -m compileall -q .
       - name: Run order safety tests
