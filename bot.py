@@ -20,8 +20,8 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
-from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message
-from customer_service import support_callback, support_reply_message, customer_message_handler, order_edit_message
+from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message, order_edit_message
+from customer_service import support_callback, support_reply_message, customer_message_handler
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
