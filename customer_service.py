@@ -185,6 +185,8 @@ def _format_template(template_id, order):
     text = TEMPLATES[template_id][1]
     if order and template_id in {"welcome_confirm", "welcome_confirm_qr"}:
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
+        delivery_fee = int(order["delivery_fee"] or 0) if "delivery_fee" in order.keys() else 0
+        delivery_text = f"{delivery_fee:,}".replace(",", ".") + " ₫"
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
         # Сохраняем точную ссылку Google Maps, которую клиент указал при оформлении заказа.
@@ -195,8 +197,8 @@ def _format_template(template_id, order):
             "чтобы всё было правильно! 😊\n\n"
             f"📍 Адрес: {address}\n"
             f"🍱 Заказ: {items}\n"
-            f"💰 Итого к оплате: {total} + … ₫ "
-            "(стоимость доставки рассчитывается отдельно в зависимости от вашего адреса).\n"
+            f"🚚 Доставка: {delivery_text}\n"
+            f"💰 Итого к оплате: {total}\n"
             + (
                 "💳 Оплата: перевод по QR-коду Vietcombank ✅\n\n"
                 if template_id == "welcome_confirm_qr"
