@@ -314,7 +314,7 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
         )
         context.user_data["support_edit_mode"] = False
         context.user_data.pop("support_edit_prompt_message_id", None)
-        await message.reply_text("✅ Черновик обновлён. Именно этот текст будет отправлен клиенту после нажатия «Отправить клиенту».")
+        # Не отправляем отдельное подтверждение: обновлённый текст уже виден в черновике.
     except Exception:
         log.exception("Could not update support draft preview")
         await message.reply_text("Не удалось обновить предпросмотр. Черновик не отправлен. Попробуйте ещё раз.")
