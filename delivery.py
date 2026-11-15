@@ -300,6 +300,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if not order:
             await q.answer("Заказ не найден.", show_alert=True)
             return
+        if order["grab_tracking_url"]:
+            await q.answer("Ссылка отслеживания уже добавлена. Повторно изменить её нельзя.", show_alert=True)
+            return
         prompt = await q.message.reply_text(
             f"🔗 Отправьте ссылку отслеживания GrabExpress для заказа №{order_id}.\n"
             "Вставьте полную ссылку, начинающуюся с https://."
@@ -314,8 +317,12 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
 
     if parts[1] == "reference":
         order_id = int(parts[2])
-        if not _get_order(order_id):
+        order = _get_order(order_id)
+        if not order:
             await q.answer("Заказ не найден.", show_alert=True)
+            return
+        if order["grab_reference"]:
+            await q.answer("Grab ID уже указан. Повторно изменить его нельзя.", show_alert=True)
             return
 
         # Ignore rapid repeated taps: one active Grab ID prompt per order/chat.
@@ -476,8 +483,19 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
             context.chat_data.pop("pending_grab_tracking", None)
             await message.reply_text("Заказ не найден. Откройте его заново в панели.")
             return
+        if tracking_order["grab_tracking_url"]:
+            context.chat_data.pop("pending_grab_tracking", None)
+            await message.reply_text("Ссылка отслеживания уже была добавлена. Повторное изменение запрещено.")
+            return
         with db_connect() as conn:
-            conn.execute("UPDATE orders SET grab_tracking_url = ? WHERE id = ?", (tracking_url, tracking_order_id))
+            cursor = conn.execute(
+                "UPDATE orders SET grab_tracking_url = ? WHERE id = ? AND (grab_tracking_url IS NULL OR grab_tracking_url = '')",
+                (tracking_url, tracking_order_id),
+            )
+            if cursor.rowcount != 1:
+                context.chat_data.pop("pending_grab_tracking", None)
+                await message.reply_text("Ссылка уже добавлена или заказ изменился. Повторное изменение запрещено.")
+                return
         context.chat_data.pop("pending_grab_tracking", None)
         updated = _get_order(tracking_order_id)
         customer_chat_id = updated["customer_chat_id"]
@@ -547,8 +565,15 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
         context.chat_data.pop("pending_grab_reference", None)
         await message.reply_text("Заказ не найден. Откройте его заново в панели.")
         return
+    if order["grab_reference"]:
+        context.chat_data.pop("pending_grab_reference", None)
+        await message.reply_text("Grab ID уже был указан. Повторное изменение запрещено.")
+        return
     with db_connect() as conn:
-        cursor = conn.execute("UPDATE orders SET grab_reference = ? WHERE id = ?", (reference, pending_order_id))
+        cursor = conn.execute(
+            "UPDATE orders SET grab_reference = ? WHERE id = ? AND (grab_reference IS NULL OR grab_reference = '')",
+            (reference, pending_order_id),
+        )
         if cursor.rowcount != 1:
             log.error("Grab ID save affected %s rows for order_id=%s", cursor.rowcount, pending_order_id)
             await message.reply_text("Не удалось сохранить Grab ID. Проверьте заказ и попробуйте ещё раз.")
