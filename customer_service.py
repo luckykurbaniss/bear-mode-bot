@@ -50,6 +50,7 @@ SET_DETAILS = {
 
 TEMPLATES = {
     "welcome_confirm": ("Приветствие и подтверждение", "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE"),
+    "welcome_confirm_qr": ("Приветствие и подтверждение — QR", "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE"),
     "prices": ("Отправить меню и цены", MENU_TEXT),
     "delivery": ("Условия доставки", "Доставка оплачивается отдельно. Напишите, пожалуйста, адрес доставки — мы уточним стоимость и возможность доставки в ваш район 😊"),
     "payment": ("Способы оплаты", "Оплатить заказ можно наличными или переводом. Какой способ вам удобнее? 😊"),
@@ -69,7 +70,7 @@ TEMPLATES = {
 }
 
 CATEGORIES = {
-    "start": ("👋 Приветствие и подтверждение", ["welcome_confirm"]),
+    "start": ("👋 Приветствие и подтверждение", ["welcome_confirm", "welcome_confirm_qr"]),
     "menu": ("🍱 Меню и цены", ["prices", "total"]),
     "delivery": ("🚚 Доставка", ["delivery", "delay"]),
     "payment": ("💵 Оплата", ["payment"]),
@@ -167,7 +168,7 @@ def support_order_button(order_id):
 
 def _format_template(template_id, order):
     text = TEMPLATES[template_id][1]
-    if order and template_id == "welcome_confirm":
+    if order and template_id in {"welcome_confirm", "welcome_confirm_qr"}:
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
@@ -179,8 +180,13 @@ def _format_template(template_id, order):
             "чтобы всё было правильно! 😊\n\n"
             f"📍 Адрес: {address}\n"
             f"🍱 Заказ: {items}\n"
-            f"💰 Итого к оплате: {total} + стоимость доставки "
-            "(стоимость доставки рассчитывается отдельно в зависимости от вашего адреса).\n\n"
+            f"💰 Итого к оплате: {total} + … ₫ "
+            "(стоимость доставки рассчитывается отдельно в зависимости от вашего адреса).\n"
+            + (
+                "💳 Оплата: перевод по QR-коду Vietcombank ✅\n\n"
+                if template_id == "welcome_confirm_qr"
+                else "\n"
+            )
             "Если всё верно, пожалуйста, подтвердите заказ — и мы сразу возьмём его в работу. "
             "Следите за статусом в боте ❤️"
         )
