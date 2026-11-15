@@ -16,7 +16,20 @@ DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 ADMIN_CHAT_ID = os.getenv("ADMIN_CHAT_ID", "").strip()
 
 DELIVERY_ACTIONS = {"grab_requested", "picked_up", "payment_received", "delivered"}
+ORDER_STATUS_TRANSITIONS = {
+    "new": {"confirmed", "cancelled"},
+    "confirmed": {"cooking", "cancelled"},
+    "cooking": {"cancelled"},
+    "courier": set(),
+    "delivered": set(),
+    "cancelled": set(),
+}
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+
+def is_order_transition_allowed(current_status: str, next_status: str) -> bool:
+    """Return whether an order status may move to the requested next status."""
+    return next_status in ORDER_STATUS_TRANSITIONS.get(current_status, set())
 
 # Keep these values aligned with the live Mini App catalog in bot.py.
 EDITABLE_CATALOG = {
@@ -359,19 +372,11 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
 
     notice = None
     # Enforce a one-way order lifecycle, including callbacks from stale cards.
-    allowed_status_transitions = {
-        "new": {"confirmed", "cancelled"},
-        "confirmed": {"cooking", "cancelled"},
-        "cooking": {"cancelled"},
-        "courier": set(),
-        "delivered": set(),
-        "cancelled": set(),
-    }
     if parts[1] == "set":
         if action == order["status"]:
             await q.answer("Этот статус уже установлен.")
             return
-        if action not in allowed_status_transitions.get(order["status"], set()):
+        if not is_order_transition_allowed(order["status"], action):
             await q.answer("Этот переход статуса недоступен. Откройте актуальную карточку заказа.", show_alert=True)
             return
     if parts[1] == "delivery":
