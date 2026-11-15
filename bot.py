@@ -730,6 +730,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(
             "Заказ отменён. Если захотите заказать — нажмите /start."
         )
+        context.user_data.clear()
         return ConversationHandler.END
 
     if not ADMIN_CHAT_ID:
@@ -737,6 +738,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Заказ заполнен, но получатель заказов не настроен. "
             "Напишите @lucky_ranger."
         )
+        context.user_data.clear()
         return ConversationHandler.END
 
     user = update.effective_user
@@ -781,6 +783,7 @@ async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Пожалуйста, напишите @lucky_ranger."
         )
 
+    context.user_data.clear()
     return ConversationHandler.END
 
   
