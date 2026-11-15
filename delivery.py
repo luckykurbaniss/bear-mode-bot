@@ -2,7 +2,7 @@ import logging
 import os
 import sqlite3
 import re
-from datetime import date
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -160,8 +160,9 @@ def _order_keyboard(order):
         ]
         if row:
             rows.append(row)
+    if order["status"] not in {"delivered", "cancelled"}:
+        rows.append([InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")])
     rows.extend([
-        [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
         [InlineKeyboardButton("🧾 Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
         [InlineKeyboardButton("🚚 Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
         [InlineKeyboardButton("🛵 Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
@@ -403,7 +404,7 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 parsed_date = date.fromisoformat(raw)
             except ValueError as exc:
                 raise ValueError("Неверная дата. Используйте формат ГГГГ-ММ-ДД.") from exc
-            if parsed_date < date.today():
+            if parsed_date < datetime.now(VN_TZ).date():
                 raise ValueError("Нельзя указать дату в прошлом.")
             updates[field] = raw
             customer_notice = f"Дата доставки: {raw}"
