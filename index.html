@@ -120,6 +120,10 @@ $('orderForm').onsubmit=e=>{
   // Telegram sendData automatically closes a reply-keyboard Mini App after dispatching web_app_data.
   // Do not call tg.close() manually: closing immediately can race the native data hand-off.
   tg.sendData(JSON.stringify(order));
+  // Clear the persisted basket only after Telegram accepts the sendData call.
+  for(const key of Object.keys(cart))delete cart[key];
+  try{localStorage.removeItem(CART_STORAGE_KEY)}catch(err){console.warn("Could not clear saved cart:",err)}
+  update();
   submitButton.textContent='Заказ передан в Telegram ✓';
   toast('Передаём заказ боту. Подожди подтверждения в чате.');
  }catch(err){
