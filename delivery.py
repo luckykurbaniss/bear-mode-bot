@@ -166,17 +166,14 @@ def _parse_edited_items(raw_text):
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
+    # Keep the cooking action visible after it is selected.
+    # The checkmark reflects the persisted order status in the database.
     status_buttons = (
-        [("🍳 Готовится", "cooking")]
-        if order["status"] == "confirmed"
+        [("✅ Готовится" if order["status"] == "cooking" else "🍳 Готовится", "cooking")]
+        if order["status"] in {"confirmed", "cooking"}
         else []
     )
-    # Show only available next statuses. The current status is omitted,
-    # so an old status can never keep a stale checkmark on the card.
-    available_statuses = [
-        (label, status) for label, status in status_buttons
-        if status != order["status"]
-    ]
+    available_statuses = status_buttons
     for start in range(0, len(available_statuses), 2):
         row = [
             InlineKeyboardButton(
