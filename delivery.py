@@ -256,6 +256,24 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Жду новые данные")
         return
 
+    if parts[1] == "tracking":
+        order_id = int(parts[2])
+        order = _get_order(order_id)
+        if not order:
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        prompt = await q.message.reply_text(
+            f"🔗 Отправьте ссылку отслеживания GrabExpress для заказа №{order_id}.\n"
+            "Вставьте полную ссылку, начинающуюся с https://."
+        )
+        context.chat_data["pending_grab_tracking"] = {
+            "order_id": order_id,
+            "prompt_id": prompt.message_id,
+            "order_card_message_id": q.message.message_id,
+        }
+        await q.answer("Жду ссылку Grab")
+        return
+
     if parts[1] == "reference":
         order_id = int(parts[2])
         if not _get_order(order_id):
@@ -376,9 +394,54 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     if not _admin_only(update) or not message:
         log.warning("Grab ID reply ignored: unauthorized user or missing message")
         return
+    tracking_pending = context.chat_data.get("pending_grab_tracking")
+    if tracking_pending:
+        reply = message.reply_to_message
+        if reply and reply.message_id != tracking_pending["prompt_id"]:
+            await message.reply_text("Ответьте на запрос ссылки Grab или отправьте ссылку обычным сообщением.")
+            return
+        tracking_url = (message.text or "").strip()
+        parsed = urlsplit(tracking_url)
+        if parsed.scheme != "https" or not parsed.netloc or " " in tracking_url or len(tracking_url) > 2000:
+            await message.reply_text("Некорректная ссылка. Отправьте полную ссылку, начинающуюся с https://.")
+            return
+        tracking_order_id = tracking_pending["order_id"]
+        tracking_order = _get_order(tracking_order_id)
+        if not tracking_order:
+            context.chat_data.pop("pending_grab_tracking", None)
+            await message.reply_text("Заказ не найден. Откройте его заново в панели.")
+            return
+        with db_connect() as conn:
+            conn.execute("UPDATE orders SET grab_tracking_url = ? WHERE id = ?", (tracking_url, tracking_order_id))
+        context.chat_data.pop("pending_grab_tracking", None)
+        updated = _get_order(tracking_order_id)
+        customer_chat_id = updated["customer_chat_id"]
+        if customer_chat_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=customer_chat_id,
+                    text=f"🛵 Отследить доставку вашего заказа BEAR MODE №{tracking_order_id} можно по ссылке ниже.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Отследить курьера Grab", url=tracking_url)]]),
+                )
+            except Exception:
+                log.exception("Could not send Grab tracking link to customer for order %s", tracking_order_id)
+        card_id = tracking_pending.get("order_card_message_id")
+        if card_id:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=message.chat_id,
+                    message_id=card_id,
+                    text=_order_text(updated),
+                    reply_markup=_order_keyboard(updated),
+                )
+            except BadRequest as exc:
+                log.warning("Could not refresh order card after tracking URL save: %s", exc)
+        await message.reply_text("✅ Ссылка отслеживания сохранена и отправлена клиенту.")
+        return
+
     pending = context.chat_data.get("pending_grab_reference")
     if not pending:
-        log.info("Text reply received without a pending Grab ID request: chat_id=%s", message.chat_id)
+        log.info("Text received without pending Grab ID or tracking URL: chat_id=%s", message.chat_id)
         return
     reply = message.reply_to_message
     # Accept both ways: a direct text message while a Grab ID request is pending,
