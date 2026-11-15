@@ -215,7 +215,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             return
         label, prompt_text = prompts[field]
         prompt = await q.message.reply_text(
-            f"✏️ Изменяем {label} заказа №{order_id}.\n\n{prompt_text}\n\nОтветьте именно на это сообщение."
+            f"✏️ Изменяем {label} заказа №{order_id}.\n\n{prompt_text}\n\n"
+            "Можно ответить на это сообщение или просто отправить новое сообщение в чат."
         )
         context.chat_data["pending_order_edit"] = {
             "order_id": order_id,
@@ -370,10 +371,14 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
 async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Validate and save one administrator-entered order edit."""
     message = update.effective_message
-    if not _admin_only(update) or not message or not message.reply_to_message:
+    if not _admin_only(update) or not message:
         return
     pending = context.chat_data.get("pending_order_edit")
-    if not pending or message.reply_to_message.message_id != pending["prompt_id"]:
+    if not pending:
+        return
+    # A reply must target the active prompt. A regular text message is also
+    # accepted while an edit is pending, so the admin is not forced to use Reply.
+    if message.reply_to_message and message.reply_to_message.message_id != pending["prompt_id"]:
         return
     order_id = pending["order_id"]
     field = pending["field"]
