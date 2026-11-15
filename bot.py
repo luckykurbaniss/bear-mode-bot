@@ -19,7 +19,7 @@ from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, MessageHandler,
     ConversationHandler, ContextTypes, filters
 )
-from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message
+from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message, order_edit_message
 from customer_service import support_callback, support_reply_message, customer_message_handler
 
 logging.basicConfig(
@@ -1204,10 +1204,11 @@ async def main():
     # Customer-support callbacks must be handled before the general admin callback.
     app.add_handler(CallbackQueryHandler(support_callback, pattern=r"^support:"))
     # Handle order details and delivery controls before the general admin callback.
-    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference):"))
+    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference|edit):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, support_reply_message), group=-3)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, order_edit_message), group=-2)
     app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
     app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(delivery|contact|home)$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, customer_message_handler), group=1)
