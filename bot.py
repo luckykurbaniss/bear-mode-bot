@@ -502,7 +502,6 @@ SET, QUANTITY, NAME, PHONE, ADDRESS, COMMENT, CONFIRM = range(7)
 
 def main_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📦 Как работает доставка", callback_data="delivery")],
         [InlineKeyboardButton("☎️ Связаться", callback_data="contact")],
     ])
 
