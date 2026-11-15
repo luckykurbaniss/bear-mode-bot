@@ -239,6 +239,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             return
         field = parts[3]
         if field == "cancelled":
+            if order["status"] not in {"new", "confirmed", "cooking"}:
+                await q.answer("Заказ на этом этапе уже нельзя отменить из панели.", show_alert=True)
+                return
             _set_value(order_id, "status", "cancelled")
             customer_chat_id = order["customer_chat_id"] if "customer_chat_id" in order.keys() else None
             if customer_chat_id:
@@ -259,7 +262,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         prompts = {
             "customer_name": ("имя клиента", "Введите новое имя (2–80 символов)."),
             "phone": ("телефон", "Введите новый телефон (7–30 символов)."),
-            "address": ("адрес доставки", "Введите новый адрес (5–400 символов)."),
+            "address": ("адрес доставки", "Введите новый адрес (5–1000 символов)."),
             "delivery_date": ("дату доставки", "Введите дату в формате ГГГГ-ММ-ДД. Например: 2026-11-20."),
             "comment": ("комментарий", "Введите новый комментарий (до 500 символов). Чтобы очистить, отправьте —."),
             "items": ("состав и сумму", "Отправьте каждую позицию с новой строки в формате Название × количество.\n\nДоступные позиции:\n" + "\n".join(f"• {name} — {price:,} ₫".replace(",", ".") for name, price in EDITABLE_CATALOG.items())),
@@ -276,6 +279,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             "order_id": order_id,
             "field": field,
             "prompt_id": prompt.message_id,
+            "order_card_chat_id": q.message.chat_id,
+            "order_card_message_id": q.message.message_id,
         }
         await q.answer("Жду новые данные")
         return
@@ -351,13 +356,27 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         return
 
     notice = None
-    # Make status actions idempotent: repeated taps on an old Telegram card
-    # must not send duplicate customer notifications.
-    if parts[1] == "set" and order["status"] == action:
-        await q.answer("Этот статус уже установлен.")
-        return
+    # Enforce a one-way order lifecycle, including callbacks from stale cards.
+    allowed_status_transitions = {
+        "new": {"confirmed", "cancelled"},
+        "confirmed": {"cooking", "cancelled"},
+        "cooking": {"cancelled"},
+        "courier": set(),
+        "delivered": set(),
+        "cancelled": set(),
+    }
+    if parts[1] == "set":
+        if action == order["status"]:
+            await q.answer("Этот статус уже установлен.")
+            return
+        if action not in allowed_status_transitions.get(order["status"], set()):
+            await q.answer("Этот переход статуса недоступен. Откройте актуальную карточку заказа.", show_alert=True)
+            return
     if parts[1] == "delivery":
         current_grab = order["grab_status"] or "not_requested"
+        if order["status"] in {"cancelled", "delivered"}:
+            await q.answer("Для отменённого или доставленного заказа это действие недоступно.", show_alert=True)
+            return
         already_applied = (
             (action == "grab_requested" and current_grab == "requested")
             or (action == "picked_up" and current_grab == "picked_up" and order["status"] == "courier")
@@ -366,6 +385,17 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         )
         if already_applied:
             await q.answer("Это действие уже выполнено.")
+            return
+        if action == "grab_requested" and current_grab != "not_requested":
+            await q.answer("Grab уже был вызван или курьер забрал заказ.", show_alert=True)
+            return
+        if action == "picked_up" and current_grab != "requested":
+            await q.answer("Сначала отметьте, что Grab вызван.", show_alert=True)
+            return
+        if action == "delivered" and not (
+            current_grab == "picked_up" or order["status"] == "courier"
+        ):
+            await q.answer("Сначала отметьте, что курьер забрал заказ.", show_alert=True)
             return
 
     if parts[1] == "set":
@@ -552,8 +582,8 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
             updates[field] = raw
             customer_notice = f"Телефон: {raw}"
         elif field == "address":
-            if not 5 <= len(raw) <= 400:
-                raise ValueError("Адрес должен содержать от 5 до 400 символов.")
+            if not 5 <= len(raw) <= 1000:
+                raise ValueError("Адрес должен содержать от 5 до 1000 символов.")
             updates[field] = raw
             customer_notice = f"Адрес доставки: {raw}"
         elif field == "delivery_date":
@@ -576,17 +606,27 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
             items_text, total = _parse_edited_items(raw)
             updates["items_text"] = items_text
             updates["total"] = total
-            customer_notice = (
-                f"Новый состав: {items_text}\n"
-                f"Итого к оплате: {total:,} ₫"
-            ).replace(",", ".")
+            if total != int(order["total"]):
+                # A previously received payment can no longer be assumed valid
+                # after the customer-facing amount changes.
+                updates["payment_status"] = "unpaid"
+                customer_notice = (
+                    f"Новый состав: {items_text}\n"
+                    f"Новая сумма к оплате: {total:,} ₫\n"
+                    "Пожалуйста, проверьте сумму. Оплату необходимо сверить повторно."
+                ).replace(",", ".")
+            else:
+                customer_notice = (
+                    f"Новый состав: {items_text}\n"
+                    f"Итого к оплате: {total:,} ₫"
+                ).replace(",", ".")
         else:
             raise ValueError("Неизвестное поле.")
     except ValueError as exc:
         await message.reply_text(f"⚠️ {exc}\nПопробуйте ещё раз, ответив на исходное сообщение.")
         return
 
-    allowed_columns = {"customer_name", "phone", "address", "delivery_date", "comment", "items_text", "total"}
+    allowed_columns = {"customer_name", "phone", "address", "delivery_date", "comment", "items_text", "total", "payment_status"}
     if not updates or any(column not in allowed_columns for column in updates):
         await message.reply_text("Не удалось сохранить изменение.")
         return
@@ -606,9 +646,26 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             log.exception("Could not notify customer about edited order %s", order_id)
     updated = _get_order(order_id)
-    await message.reply_text(
-        f"✅ Заказ №{order_id} обновлён.\n\n{_order_text(updated)}",
-        reply_markup=_order_keyboard(updated),
-    )
+    card_chat_id = pending.get("order_card_chat_id", message.chat_id)
+    card_message_id = pending.get("order_card_message_id")
+    if card_message_id:
+        try:
+            await context.bot.edit_message_text(
+                chat_id=card_chat_id,
+                message_id=card_message_id,
+                text=_order_text(updated),
+                reply_markup=_order_keyboard(updated),
+            )
+        except BadRequest as exc:
+            log.warning("Could not refresh original order card after edit: %s", exc)
+            await message.reply_text(
+                f"✅ Заказ №{order_id} обновлён.\n\n{_order_text(updated)}",
+                reply_markup=_order_keyboard(updated),
+            )
+    else:
+        await message.reply_text(
+            f"✅ Заказ №{order_id} обновлён.\n\n{_order_text(updated)}",
+            reply_markup=_order_keyboard(updated),
+        )
 
 
