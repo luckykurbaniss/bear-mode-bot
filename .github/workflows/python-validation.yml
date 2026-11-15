@@ -19,6 +19,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Compile Python modules
-        run: python -m py_compile bot.py delivery.py
+        run: python -m py_compile bot.py delivery.py customer_service.py
       - name: Check whitespace and patch errors
         run: git diff --check
