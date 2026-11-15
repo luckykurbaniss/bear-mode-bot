@@ -1009,10 +1009,11 @@ async def _order_api_unlocked(request):
             "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Init-Data",
             "Vary": "Origin",
         })
+    # aiohttp.web.json_response sets Content-Type itself; do not pass it
+    # in headers as well, otherwise it raises ValueError after saving/notifying.
     headers = {
         "Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
         "Vary": "Origin",
-        "Content-Type": "application/json",
     }
     if request.headers.get("Origin") != ALLOWED_WEB_ORIGIN:
         return web.json_response({"ok": False, "error": "Origin not allowed"}, status=403, headers=headers)
