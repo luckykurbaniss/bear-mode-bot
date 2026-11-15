@@ -300,7 +300,7 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(
                 chat_id=int(draft["chat_id"]),
                 text=draft["text"].strip(),
-                reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") == "welcome_confirm" else None),
+                reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") in {"welcome_confirm", "welcome_confirm_qr"} else None),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as exc:
@@ -380,7 +380,7 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
         sent = await context.bot.send_message(
             chat_id=int(draft["chat_id"]),
             text=new_text,
-            reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") == "welcome_confirm" else None),
+            reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") in {"welcome_confirm", "welcome_confirm_qr"} else None),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
     except Exception as exc:
