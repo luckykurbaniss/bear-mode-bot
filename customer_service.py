@@ -129,9 +129,7 @@ def _format_template(template_id, order):
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
-        # Не вставляем Google Maps URL в шаблон: Telegram показывает карточку-ссылку.
-        if address.startswith(("https://", "http://")):
-            address = "указан при оформлении заказа"
+        # Сохраняем точную ссылку Google Maps, которую клиент указал при оформлении заказа.
         text = (
             "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE\n\n"
             f"📍 Адрес: {address}\n"
