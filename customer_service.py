@@ -2,7 +2,7 @@ import logging
 import os
 import sqlite3
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
 from telegram.ext import ContextTypes
 
 log = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             + "\n\nЧтобы изменить текст, ответьте на это сообщение своим вариантом. "
               "Затем нажмите «Отправить клиенту».",
             reply_markup=_preview_keyboard(),
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
         context.user_data["support_preview_message_id"] = preview.message_id
         await q.answer()
