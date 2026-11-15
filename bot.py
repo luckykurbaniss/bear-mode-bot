@@ -1207,7 +1207,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference|edit):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
-    app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, support_reply_message), group=-3)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, support_reply_message), group=-3)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, order_edit_message), group=-2)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
     app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(delivery|contact|home)$"))
