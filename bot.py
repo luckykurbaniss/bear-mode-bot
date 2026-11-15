@@ -541,9 +541,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
-            "🐼 Выбирай, что будем делать:\n\n🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата.",
-            parse_mode="Markdown",
-            reply_markup=main_keyboard()
+            "🐾 Магазин всегда под лапкой! Открывайте меню в любое время — кнопка «Открыть магазин» внизу чата."
         )
         sent_ids.append(msg.message_id)
         context.chat_data["start_message_ids"] = sent_ids
@@ -1208,16 +1206,6 @@ async def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(MessageHandler(filters.REPLY & filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
-    app.add_handler(conv)
-    app.add_handler(
-        CallbackQueryHandler(
-            menu_callback,
-            pattern=r"^(catalog|delivery|contact|home)$"
-        )
-    )
-    app.add_handler(
-        CallbackQueryHandler(choose_set, pattern=r"^set_[1-4]$")
-    )
     app.add_error_handler(telegram_error_handler)
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
