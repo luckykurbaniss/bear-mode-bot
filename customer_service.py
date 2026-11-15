@@ -306,7 +306,10 @@ async def support_reply_message(update: Update, context: ContextTypes.DEFAULT_TY
     is_reply_to_draft = reply_id == preview_id
     is_reply_to_edit_prompt = bool(edit_prompt_id and reply_id == edit_prompt_id)
     is_direct_edit = bool(context.user_data.get("support_edit_mode") and reply_id is None)
-    if not (is_reply_to_draft or is_reply_to_edit_prompt or is_direct_edit):
+    # Telegram's native "Edit message" produces edited_message updates, not new
+    # text messages. Accept edits to the actual preview as the authoritative draft.
+    is_native_edit_of_draft = message.message_id == preview_id
+    if not (is_reply_to_draft or is_reply_to_edit_prompt or is_direct_edit or is_native_edit_of_draft):
         return
 
     new_text = message.text.strip()
