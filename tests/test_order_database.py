@@ -1,4 +1,4 @@
-import os
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,7 +35,7 @@ class OrderDatabaseTests(unittest.TestCase):
 
     def test_submission_id_is_unique(self):
         self.create_order("submission_123456")
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlite3.IntegrityError):
             self.create_order("submission_123456")
 
     def test_submission_id_can_be_omitted_for_legacy_orders(self):
