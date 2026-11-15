@@ -187,7 +187,7 @@ def _format_template(template_id, order):
                 if template_id == "welcome_confirm_qr"
                 else "\n"
             )
-            "Если всё верно, пожалуйста, подтвердите заказ — и мы сразу возьмём его в работу. "
+            + "Если всё верно, пожалуйста, подтвердите заказ — и мы сразу возьмём его в работу. "
             "Следите за статусом в боте ❤️"
         )
     elif order and template_id == "total":
