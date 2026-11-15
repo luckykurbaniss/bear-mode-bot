@@ -1205,7 +1205,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(support_callback, pattern=r"^support:"))
     app.add_handler(CallbackQueryHandler(customer_order_confirmation_callback, pattern=r"^customer_order:"))
     # Handle order details and delivery controls before the general admin callback.
-    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference|edit):"))
+    app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference|tracking|edit):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, support_reply_message), group=-3)
