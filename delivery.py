@@ -7,7 +7,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
 
-from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from customer_service import delete_order_decision_notice, support_order_button
@@ -195,13 +195,9 @@ def _parse_edited_items(raw_text):
 
 def _order_keyboard(order):
     order_id = order["id"]
-    # Telegram recognises phone numbers as tappable phone entities, but
-    # arbitrary names have no equivalent native copy entity. Keep one
-    # dedicated copy action attached to the order card (not in the status menu).
-    rows = [[InlineKeyboardButton(
-        "📋 Скопировать имя клиента",
-        copy_text=CopyTextButton(text=str(order["customer_name"])),
-    )]]
+    # Keep customer name and phone as plain text in the order card.
+    # The admin can select the name directly from the message and copy it.
+    rows = []
     # Keep cancellation visible at the top of a new order card.
     # Once cancelled, replace the action with a persistent status marker.
     if order["status"] == "cancelled":
