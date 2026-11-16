@@ -250,6 +250,9 @@ def _order_keyboard(order):
             )
         ])
         rows.append([
+            InlineKeyboardButton("💬 Переписка", callback_data=f"support:history:{order_id}")
+        ])
+        rows.append([
             InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")
         ])
         return InlineKeyboardMarkup(rows)
@@ -288,6 +291,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton(("✅ " if show_progress and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
         [InlineKeyboardButton(("✅ " if show_progress and order["status"] == "delivered" else "🏡 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
         [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
+        [InlineKeyboardButton("💬 Переписка", callback_data=f"support:history:{order_id}")],
         support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
     ])
