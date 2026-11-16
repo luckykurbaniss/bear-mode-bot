@@ -413,7 +413,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
                 try:
                     await context.bot.send_message(
                         chat_id=customer_chat_id,
-                        text="❌ К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+                        text="🐻 Ваш заказ отменён. До новых встреч и вкусных моментов вместе с BEAR MODE! 🐼",
                     )
                 except Exception:
                     log.exception("Could not notify customer about cancelled order")
@@ -596,12 +596,12 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
     if parts[1] == "set":
         status_messages = {
             "new": "Мы получили ваш заказ и скоро свяжемся с вами для подтверждения.",
-            "confirmed": "Ваш заказ подтверждён! Спасибо.",
-            "cooking": "🍳 Ваш заказ взят в работу и уже готовится на кухне.",
+            "confirmed": "🐻 Ура! Ваш заказ подтверждён! Мишки приступают к работе! ❤️",
+            "cooking": "🍳 Ваш заказ уже готовится! На медвежьей кухне всё кипит! 🐼",
             "ready": "🍱 Ваш заказ готов! Мишки всё проверили и аккуратно упаковали!",
-            "courier": "Ваш заказ передан курьеру и скоро будет у вас.",
-            "delivered": "Ваш заказ отмечен как доставленный. Приятного аппетита!",
-            "cancelled": "К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+            "courier": "🛵 Ваш заказ уже у курьера! Медвежьи вкусняшки едут к вам! 🍯",
+            "delivered": "🏡 Ваш заказ доставлен! Мишки желают вам приятного аппетита! 🥰",
+            "cancelled": "🐻 Ваш заказ отменён. До новых встреч и вкусных моментов вместе с BEAR MODE! 🐼",
         }
         if action not in status_messages:
             await q.answer("Неизвестный статус.", show_alert=True)
@@ -618,13 +618,13 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
     elif action == "picked_up":
         _set_value(order_id, "grab_status", "picked_up")
         _set_value(order_id, "status", "courier")
-        notice = "🛵 Ваш заказ передан курьеру GrabExpress и скоро будет у вас."
+        notice = "🛵 Ваш заказ уже у курьера! Медвежьи вкусняшки едут к вам! 🍯"
     elif action == "payment_received":
         _set_value(order_id, "payment_status", "received")
     elif action == "delivered":
         _set_value(order_id, "grab_status", "delivered")
         _set_value(order_id, "status", "delivered")
-        notice = "🎉 Ваш заказ доставлен! Спасибо, что выбрали BEAR MODE."
+        notice = "🏡 Ваш заказ доставлен! Мишки желают вам приятного аппетита! 🥰"
 
     if notice and order["customer_chat_id"]:
         try:
