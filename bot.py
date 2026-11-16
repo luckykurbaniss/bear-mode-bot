@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import time
 from urllib.parse import parse_qsl, quote, urlsplit
+import aiohttp
 from aiohttp import web
 
 from datetime import datetime, date
@@ -75,9 +76,9 @@ def google_maps_route_url(customer_map_link: str) -> str:
 
 async def estimate_customer_route(customer_map_link: str):
     """Estimate driving distance from a validated Google Maps share link."""
-    timeout = aiohttp.ClientTimeout(total=10, connect=4)
     current_url = customer_map_link
     try:
+        timeout = aiohttp.ClientTimeout(total=10, connect=4)
         async with aiohttp.ClientSession(timeout=timeout, headers={"User-Agent": "BEAR-MODE-delivery-estimator/1.0"}) as session:
             for _ in range(6):
                 parsed = urlsplit(current_url)
