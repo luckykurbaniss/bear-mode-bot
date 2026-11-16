@@ -200,6 +200,17 @@ def _order_keyboard(order):
     confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "courier", "delivered"}
     cooking_stage_reached = show_progress and order["status"] in {"cooking", "courier", "delivered"}
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
+    # If the customer cancelled the order, show that fact at the top of the
+    # admin card, before the confirmation stage. This is a display-only row:
+    # tapping it simply refreshes the order card and never changes the status.
+    if order["status"] == "cancelled":
+        rows.append([
+            InlineKeyboardButton(
+                "✅ Отменён",
+                callback_data=f"adm:order:{order_id}",
+            )
+        ])
+
     status_buttons = [
         ("✅ Подтверждён" if confirmed_stage_reached else "🤝 Подтвердить", "confirmed"),
         ("✅ Готовится" if cooking_stage_reached else "🍳 Готовится", "cooking"),
