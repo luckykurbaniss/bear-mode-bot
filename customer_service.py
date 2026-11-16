@@ -88,6 +88,45 @@ def _db():
     return conn
 
 
+def _ensure_order_decision_notices(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_decision_notices (
+            order_id INTEGER PRIMARY KEY,
+            admin_chat_id TEXT NOT NULL,
+            message_id INTEGER NOT NULL
+        )
+        """
+    )
+
+
+async def delete_order_decision_notice(bot, order_id):
+    """Delete the admin's temporary 'customer confirmed/cancelled' notice after delivery."""
+    with _db() as conn:
+        _ensure_order_decision_notices(conn)
+        notice = conn.execute(
+            "SELECT admin_chat_id, message_id FROM order_decision_notices WHERE order_id = ?",
+            (int(order_id),),
+        ).fetchone()
+    if not notice:
+        return False
+    try:
+        await bot.delete_message(
+            chat_id=int(notice["admin_chat_id"]),
+            message_id=int(notice["message_id"]),
+        )
+    except Exception:
+        log.exception(
+            "Could not delete customer decision notice: order_id=%s chat_id=%s message_id=%s",
+            order_id, notice["admin_chat_id"], notice["message_id"],
+        )
+        return False
+    with _db() as conn:
+        conn.execute("DELETE FROM order_decision_notices WHERE order_id = ?", (int(order_id),))
+    log.info("Deleted customer decision notice after delivery: order_id=%s", order_id)
+    return True
+
+
 def _admin(update: Update) -> bool:
     return bool(ADMIN_CHAT_ID) and update.effective_user is not None and str(update.effective_user.id) == ADMIN_CHAT_ID
 
@@ -164,7 +203,16 @@ async def customer_order_confirmation_callback(update: Update, context: ContextT
     await q.message.reply_text(customer_text)
     if ADMIN_CHAT_ID:
         try:
-            await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=admin_text)
+            admin_notice = await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=admin_text)
+            with _db() as conn:
+                _ensure_order_decision_notices(conn)
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO order_decision_notices (order_id, admin_chat_id, message_id)
+                    VALUES (?, ?, ?)
+                    """,
+                    (order_id, str(ADMIN_CHAT_ID), int(admin_notice.message_id)),
+                )
         except Exception:
             log.exception("Could not notify admin about customer order decision")
     await q.answer("Готово")
