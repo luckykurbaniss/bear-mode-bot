@@ -145,6 +145,55 @@ def _latest_order(chat_id):
         ).fetchone()
 
 
+def _ensure_order_conversation(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS order_conversation (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            direction TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            telegram_message_id INTEGER
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_order_conversation_order ON order_conversation(order_id, id)"
+    )
+
+
+def _save_order_message(order_id, direction, body, telegram_message_id=None):
+    if not order_id or not body:
+        return
+    with _db() as conn:
+        _ensure_order_conversation(conn)
+        conn.execute(
+            "INSERT INTO order_conversation(order_id, direction, body, telegram_message_id) VALUES (?, ?, ?, ?)",
+            (int(order_id), direction, str(body)[:4000], telegram_message_id),
+        )
+
+
+def _order_conversation_text(order_id):
+    with _db() as conn:
+        _ensure_order_conversation(conn)
+        rows = conn.execute(
+            "SELECT direction, body, created_at FROM order_conversation WHERE order_id = ? ORDER BY id DESC LIMIT 30",
+            (int(order_id),),
+        ).fetchall()
+    if not rows:
+        return f"💬 Переписка по заказу №{order_id} пока пуста."
+    labels = {"customer": "👤 Клиент", "admin": "🐻 Администратор", "system": "🤖 BEAR MODE"}
+    lines = [f"💬 ПЕРЕПИСКА ПО ЗАКАЗУ №{order_id}", ""]
+    for row in reversed(rows):
+        stamp = row["created_at"] or ""
+        lines.append(f"{labels.get(row['direction'], 'Сообщение')} · {stamp}")
+        lines.append(row["body"])
+        lines.append("")
+    result = "\\n".join(lines).strip()
+    return result[-3900:]
+
+
 def _target_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(label, callback_data=f"support:cat:{key}")]
@@ -275,6 +324,21 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     parts = q.data.split(":")
     action = parts[1] if len(parts) > 1 else ""
 
+    if action == "history":
+        order_id = int(parts[2])
+        order = _order(order_id)
+        if not order:
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        await q.message.reply_text(
+            _order_conversation_text(order_id),
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⬅️ К заказу", callback_data=f"adm:order:{order_id}")
+            ]]),
+        )
+        await q.answer()
+        return
+
     if action in {"order", "target"}:
         if action == "order":
             order_id = int(parts[2])
@@ -380,6 +444,8 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         order_id = draft.get("order_id") or 0
+        if order_id:
+            _save_order_message(order_id, "admin", draft["text"].strip(), sent.message_id)
         log.info(
             "Admin support reply delivered: message_id=%s order_id=%s customer_chat_id=%s",
             sent.message_id, order_id, draft["chat_id"],
@@ -526,6 +592,8 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
 
     answer = _faq_answer(body) if message.text else None
     order = _latest_order(chat.id)
+    if order:
+        _save_order_message(order["id"], "customer", body, message.message_id)
     order_label = f"Заказ №{order['id']}" if order else "Заказ не найден"
     username = f"@{user.username}" if user.username else f"Telegram ID {user.id}"
     alert = (
@@ -559,6 +627,8 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
                 message_id=message.message_id,
                 reply_to_message_id=sent.message_id,
             )
+        if order and answer:
+            _save_order_message(order["id"], "system", answer)
         log.info(
             "Customer message forwarded successfully: customer_chat_id=%s message_id=%s admin_chat_id=%s order_id=%s",
             chat.id, message.message_id, admin_chat_id, order["id"] if order else None,
