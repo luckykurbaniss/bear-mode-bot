@@ -347,6 +347,7 @@ def admin_menu_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🆕 Новые заказы", callback_data="adm:list:new:0"),
          InlineKeyboardButton("📋 Все заказы", callback_data="adm:list:all:0")],
+        [InlineKeyboardButton("❌ Отменённые заказы", callback_data="adm:list:cancelled:0")],
         [InlineKeyboardButton("📊 Статистика и выручка", callback_data="adm:stats")],
         [InlineKeyboardButton("🗑 Очистить все заказы", callback_data="adm:clear:ask")]
     ])
@@ -453,7 +454,11 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if nav:
             rows.append(nav)
         rows.append([InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")])
-        title = "🆕 *НОВЫЕ ЗАКАЗЫ*" if status == "new" else "📋 *ВСЕ ЗАКАЗЫ*"
+        title = {
+            "new": "🆕 *НОВЫЕ ЗАКАЗЫ*",
+            "cancelled": "❌ *ОТМЕНЁННЫЕ ЗАКАЗЫ*",
+            "all": "📋 *ВСЕ ЗАКАЗЫ*",
+        }.get(status, "📋 *ЗАКАЗЫ*")
         await q.edit_message_text(title if orders else title + "\n\nЗаказов пока нет.",
                                   parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
         await q.answer()
