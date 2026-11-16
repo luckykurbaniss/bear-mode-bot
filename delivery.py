@@ -7,7 +7,7 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 from customer_service import delete_order_decision_notice, support_order_button
@@ -121,6 +121,26 @@ def _set_value(order_id, column, value):
         raise ValueError("Unsupported delivery field")
     with db_connect() as conn:
         conn.execute(f"UPDATE orders SET {column} = ? WHERE id = ?", (value, order_id))
+
+
+def _order_entities(order, prefix=""):
+    """Make the name and phone independently selectable as code-formatted fields."""
+    text = prefix + _order_text(order)
+    entities = []
+    for marker, value in (
+        ("👤 Имя: ", str(order["customer_name"])),
+        ("📱 Телефон: ", str(order["phone"])),
+    ):
+        marker_index = text.find(marker)
+        if marker_index < 0:
+            continue
+        start = marker_index + len(marker)
+        # Telegram entity offsets/lengths use UTF-16 code units.
+        offset = len(text[:start].encode("utf-16-le")) // 2
+        length = len(value.encode("utf-16-le")) // 2
+        if length:
+            entities.append(MessageEntity(type=MessageEntity.CODE, offset=offset, length=length))
+    return entities
 
 
 def _order_text(order):
@@ -405,7 +425,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             _set_value(order_id, "status", new_status)
             # Manual status corrections are silent: update admin state only.
             updated = _get_order(order_id)
-            await q.edit_message_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+            await q.edit_message_text(_order_text(updated), entities=_order_entities(updated), reply_markup=_order_keyboard(updated))
             await q.answer("Статус заказа изменён")
             return
         if order["status"] in {"delivered", "cancelled"}:
@@ -429,6 +449,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             order = _get_order(order_id)
             await q.edit_message_text(
                 _order_text(order),
+                entities=_order_entities(order),
                 reply_markup=_order_keyboard(order),
             )
             await q.answer("Заказ отменён")
@@ -529,7 +550,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if not order:
             await q.answer("Заказ не найден.", show_alert=True)
             return
-        await q.message.edit_text(_order_text(order), reply_markup=_order_keyboard(order))
+        await q.message.edit_text(_order_text(order), entities=_order_entities(order), reply_markup=_order_keyboard(order))
         await q.answer("Заказ открыт")
         return
 
@@ -656,7 +677,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
 
     updated = _get_order(order_id)
     # Keep exactly one live order card: replace its text and keyboard in place.
-    await q.message.edit_text(_order_text(updated), reply_markup=_order_keyboard(updated))
+    await q.message.edit_text(_order_text(updated), entities=_order_entities(updated), reply_markup=_order_keyboard(updated))
     await q.answer(
         "Статус обновлён, но уведомление клиенту не отправлено. Проверьте Telegram клиента и журнал Railway."
         if notification_error else "Статус обновлён"
@@ -729,6 +750,7 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
                     chat_id=message.chat_id,
                     message_id=card_id,
                     text=_order_text(updated),
+                    entities=_order_entities(updated),
                     reply_markup=_order_keyboard(updated),
                 )
             except BadRequest as exc:
@@ -815,6 +837,7 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
             chat_id=message.chat_id,
             message_id=order_card_message_id,
             text=_order_text(updated),
+            entities=_order_entities(updated),
             reply_markup=_order_keyboard(updated),
         ))
         task_kinds.append(("card", order_card_message_id))
@@ -844,6 +867,7 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
                         await context.bot.send_message(
                             chat_id=message.chat_id,
                             text=_order_text(updated),
+                            entities=_order_entities(updated),
                             reply_markup=_order_keyboard(updated),
                         )
                     except Exception:
@@ -963,17 +987,20 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 chat_id=card_chat_id,
                 message_id=card_message_id,
                 text=_order_text(updated),
+                entities=_order_entities(updated),
                 reply_markup=_order_keyboard(updated),
             )
         except BadRequest as exc:
             log.warning("Could not refresh original order card after edit: %s", exc)
             await message.reply_text(
                 f"✅ Заказ №{order_id} обновлён.\n\n{_order_text(updated)}",
+                entities=_order_entities(updated, f"✅ Заказ №{order_id} обновлён.\n\n"),
                 reply_markup=_order_keyboard(updated),
             )
     else:
         await message.reply_text(
             f"✅ Заказ №{order_id} обновлён.\n\n{_order_text(updated)}",
+            entities=_order_entities(updated, f"✅ Заказ №{order_id} обновлён.\n\n"),
             reply_markup=_order_keyboard(updated),
         )
 
