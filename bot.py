@@ -551,7 +551,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🔥 Готовые сеты — 170.000 ₫\n"
             "⏳ Заказы принимаем в любое время!\n"
             "🛵 Доставка из нашей берлоги ежедневно с 13:00 до 20:00.\n\n"
-            "❤️ Готовим с душой, кормим от души и по-медвежьи щедро!"
+            "❤️ Готовим с душой, кормим от души и по-медвежьи щедро!\n\n"
+            "🐾 Наш Telegram-канал:\n"
+            "https://t.me/bearmode_innhatrang"
         )
         shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261116-1"
         # Reply-keyboard Web Apps do not receive authenticated initData.
