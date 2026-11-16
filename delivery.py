@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import sqlite3
@@ -748,38 +749,55 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
     context.chat_data.pop("pending_grab_reference", None)
     updated = _get_order(pending_order_id)
     log.info("Grab ID saved successfully: order_id=%s", pending_order_id)
+    # Refresh the persistent order card and delete both temporary messages
+    # concurrently. Sequential Telegram API calls made the two messages linger.
     order_card_message_id = pending.get("order_card_message_id")
-    if order_card_message_id:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=message.chat_id,
-                message_id=order_card_message_id,
-                text=_order_text(updated),
-                reply_markup=_order_keyboard(updated),
-            )
-        except BadRequest as exc:
-            log.warning("Could not refresh order card after Grab ID save: %s", exc)
-            await message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
-    else:
-        await message.reply_text(_order_text(updated), reply_markup=_order_keyboard(updated))
-
-    # Once the ID is stored and the order card is refreshed, remove the
-    # temporary prompt and the administrator's submitted ID from the chat.
-    # Keep the persistent order card intact.
     prompt_id = pending.get("prompt_id")
+    tasks = []
+    task_kinds = []
+    if order_card_message_id:
+        tasks.append(context.bot.edit_message_text(
+            chat_id=message.chat_id,
+            message_id=order_card_message_id,
+            text=_order_text(updated),
+            reply_markup=_order_keyboard(updated),
+        ))
+        task_kinds.append(("card", order_card_message_id))
+    else:
+        tasks.append(context.bot.send_message(
+            chat_id=message.chat_id,
+            text=_order_text(updated),
+            reply_markup=_order_keyboard(updated),
+        ))
+        task_kinds.append(("card", None))
+
     for temporary_message_id in (prompt_id, message.message_id):
-        if not temporary_message_id:
-            continue
-        try:
-            await context.bot.delete_message(
+        if temporary_message_id:
+            tasks.append(context.bot.delete_message(
                 chat_id=message.chat_id,
                 message_id=temporary_message_id,
-            )
-        except BadRequest as exc:
-            log.info(
-                "Temporary Grab ID message could not be deleted: chat_id=%s message_id=%s error=%s",
-                message.chat_id, temporary_message_id, exc,
-            )
+            ))
+            task_kinds.append(("delete", temporary_message_id))
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    for (kind, message_id), result in zip(task_kinds, results):
+        if isinstance(result, Exception):
+            if kind == "card":
+                log.warning("Could not refresh order card after Grab ID save: %s", result)
+                if order_card_message_id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=message.chat_id,
+                            text=_order_text(updated),
+                            reply_markup=_order_keyboard(updated),
+                        )
+                    except Exception:
+                        log.exception("Could not send refreshed order card after Grab ID save")
+            else:
+                log.info(
+                    "Temporary Grab ID message could not be deleted: chat_id=%s message_id=%s error=%s",
+                    message.chat_id, message_id, result,
+                )
 
 
 async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
