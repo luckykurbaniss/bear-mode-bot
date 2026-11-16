@@ -374,6 +374,12 @@ def _order_status_keyboard(order):
     ])
     rows.append([
         InlineKeyboardButton(
+            ("✅ " if int(order["delivery_fee"] or 0) > 0 else "💰 ") + "Указать сумму доставки",
+            callback_data=f"adm:fee:{order_id}",
+        )
+    ])
+    rows.append([
+        InlineKeyboardButton(
             ("✅ " if cooking_stage_reached else "🍳 ") + "Готовится",
             callback_data=f"adm:edit:{order_id}:status:cooking",
         )
