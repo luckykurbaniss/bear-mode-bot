@@ -75,12 +75,17 @@ def google_maps_route_url(customer_map_link: str) -> str:
 
 
 async def estimate_customer_route(customer_map_link: str):
-    """Estimate driving distance from a validated Google Maps share link."""
+    """Resolve Google Maps links broadly, route from pickup, and estimate GrabExpress fare."""
+    from urllib.parse import urljoin, unquote
+
     current_url = customer_map_link
+    timeout = aiohttp.ClientTimeout(total=18, connect=6)
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; BEARMODE-Delivery/1.0)"}
     try:
-        timeout = aiohttp.ClientTimeout(total=10, connect=4)
-        async with aiohttp.ClientSession(timeout=timeout, headers={"User-Agent": "BEAR-MODE-delivery-estimator/1.0"}) as session:
-            for _ in range(6):
+        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+            html = ""
+            # Resolve short links and follow only Google-owned redirects.
+            for _ in range(10):
                 parsed = urlsplit(current_url)
                 host = (parsed.hostname or "").lower()
                 if parsed.scheme != "https" or not (host in GOOGLE_MAPS_HOSTS or host.endswith(".google.com")):
@@ -90,31 +95,53 @@ async def estimate_customer_route(customer_map_link: str):
                         location = response.headers.get("Location")
                         if not location:
                             return None
-                        from urllib.parse import urljoin
                         current_url = urljoin(current_url, location)
                         continue
+                    if response.status >= 400:
+                        return None
+                    html = await response.text(errors="ignore")
                     break
             else:
                 return None
 
+            # Google links encode coordinates in several URL and page-data formats.
+            source = unquote(current_url + "\\n" + html)
             patterns = (
-                r"@(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)",
-                r"!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)",
-                r"[?&](?:q|query|destination)=(-?\d{1,2}\.\d+)%2C(-?\d{1,3}\.\d+)",
+                r"@(-?\\d{1,2}\\.\\d+),\\s*(-?\\d{1,3}\\.\\d+)",
+                r"!3d(-?\\d{1,2}\\.\\d+)!4d(-?\\d{1,3}\\.\\d+)",
+                r"(?:center|destination|query|q)=(-?\\d{1,2}\\.\\d+)[,%2C]+(-?\\d{1,3}\\.\\d+)",
+                r"\\[(-?\\d{1,2}\\.\\d+),\\s*(-?\\d{1,3}\\.\\d+)\\]",
             )
             coords = None
             for pattern in patterns:
-                match = re.search(pattern, current_url, re.IGNORECASE)
+                match = re.search(pattern, source, re.IGNORECASE)
                 if match:
-                    coords = (float(match.group(1)), float(match.group(2)))
-                    break
+                    candidate = (float(match.group(1)), float(match.group(2)))
+                    if -90 <= candidate[0] <= 90 and -180 <= candidate[1] <= 180:
+                        coords = candidate
+                        break
+
+            # If Google provides a place/address but no coordinates, geocode its page title.
+            if coords is None:
+                title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
+                page_title = re.sub(r"<[^>]+>", " ", title_match.group(1)) if title_match else ""
+                page_title = unquote(page_title).replace(" - Google Maps", "").strip()
+                if page_title:
+                    geo_url = "https://nominatim.openstreetmap.org/search"
+                    async with session.get(geo_url, params={"q": page_title + ", Nha Trang, Khanh Hoa, Vietnam", "format": "jsonv2", "limit": "1"}) as response:
+                        if response.status == 200:
+                            found = await response.json()
+                            if found:
+                                coords = (float(found[0]["lat"]), float(found[0]["lon"]))
+
             if coords is None:
                 return None
             lat, lon = coords
-            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-                return None
             pickup_lat, pickup_lon = (float(x) for x in BEAR_MODE_PICKUP_COORDS.split(","))
-            route_url = f"https://router.project-osrm.org/route/v1/driving/{pickup_lon},{pickup_lat};{lon},{lat}?overview=false"
+            route_url = (
+                "https://router.project-osrm.org/route/v1/driving/"
+                f"{pickup_lon},{pickup_lat};{lon},{lat}?overview=false"
+            )
             async with session.get(route_url) as response:
                 if response.status != 200:
                     return None
@@ -125,9 +152,20 @@ async def estimate_customer_route(customer_map_link: str):
             route = routes[0]
             km = route["distance"] / 1000
             minutes = max(1, round(route["duration"] / 60))
-            return f"🛣 Примерный маршрут: {km:.1f} км · около {minutes} мин. на авто (оценка)"
+
+            # GrabExpress Super Fast published Khánh Hòa tariff:
+            # 16,691 VND for first 3 km + 5,400 VND for each next km.
+            # Add 3,000 VND published additional service fee; surge can change the app price.
+            extra_km = max(0, math.ceil(km - 3))
+            fare = 16691 + extra_km * 5400 + 3000
+            fare = int(math.ceil(fare / 1000.0) * 1000)
+            return (
+                f"🛣 Маршрут: {km:.1f} км · около {minutes} мин. на авто"
+                f"\\n💸 Ориентир GrabExpress: {fare:,} ₫".replace(",", ".")
+                + "\\n(по опубликованному тарифу Khánh Hòa; динамическая цена Grab может отличаться)"
+            )
     except Exception:
-        log.warning("Could not estimate customer route from Google Maps link", exc_info=True)
+        log.warning("Could not estimate GrabExpress fare from Google Maps link", exc_info=True)
         return None
 
 
