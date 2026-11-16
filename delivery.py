@@ -195,13 +195,20 @@ def _parse_edited_items(raw_text):
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
-    # If the customer cancelled, show a persistent, read-only marker at the top
-    # of the admin card, before the normal order workflow buttons.
+    # Keep cancellation visible at the top of a new order card.
+    # Once cancelled, replace the action with a persistent status marker.
     if order["status"] == "cancelled":
         rows.append([
             InlineKeyboardButton(
                 "✅ Отменён",
                 callback_data=f"adm:order:{order_id}",
+            )
+        ])
+    elif order["status"] == "new":
+        rows.append([
+            InlineKeyboardButton(
+                "❌ Отменить",
+                callback_data=f"adm:edit:{order_id}:cancelled",
             )
         ])
     # Reflect the selected order status as completed stages in the main menu.
