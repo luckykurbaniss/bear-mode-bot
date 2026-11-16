@@ -219,6 +219,8 @@ def init_db():
             conn.execute("ALTER TABLE orders ADD COLUMN submission_id TEXT")
         if "admin_notified" not in columns:
             conn.execute("ALTER TABLE orders ADD COLUMN admin_notified INTEGER NOT NULL DEFAULT 0")
+        if "customer_username" not in columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN customer_username TEXT")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_submission_id ON orders(submission_id) WHERE submission_id IS NOT NULL")
         # One-time rollback of the former fixed delivery charge from existing orders.
         # New orders no longer store or add a delivery fee.
@@ -272,15 +274,15 @@ def remove_shop_reminder_ids(chat_id, message_ids=None):
             )
 
 
-def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method="cash", submission_id=None):
+def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method="cash", submission_id=None, customer_username=None):
     if payment_method not in {"cash", "qr"}:
         raise ValueError("Invalid payment method")
     with db_connect() as conn:
         cur = conn.execute(
             """INSERT INTO orders
-            (created_at, customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method, submission_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)""",
-            (datetime.now(VN_TZ).isoformat(timespec="seconds"), customer_chat_id,
+            (created_at, customer_chat_id, customer_username, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, status, payment_method, submission_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)""",
+            (datetime.now(VN_TZ).isoformat(timespec="seconds"), customer_chat_id, customer_username,
              customer_name, phone, address, delivery_date, delivery_time, comment, items_text,
              int(total), payment_method, submission_id)
         )
@@ -1108,7 +1110,8 @@ async def _order_api_unlocked(request):
                 order_id = save_order(
                     int(user["id"]), customer_name, phone, address, delivery_date,
                     "", comment, ", ".join(saved_items), total,
-                    payment_method=payment_method, submission_id=submission_id
+                    payment_method=payment_method, submission_id=submission_id,
+                    customer_username=str(user.get("username", "")).strip() or None
                 )
             except sqlite3.IntegrityError:
                 with db_connect() as conn:
