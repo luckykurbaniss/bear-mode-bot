@@ -65,6 +65,19 @@
   .sheet{max-height:calc(100dvh - 12px - env(safe-area-inset-top) - env(safe-area-inset-bottom));border-radius:16px}
 }
 
+/* Keep the native delivery-date control inside the checkout on narrow and wide devices */
+.sheet #date{
+  display:block;box-sizing:border-box;
+  width:100%;inline-size:100%;min-width:0;min-inline-size:0;max-width:100%;
+  height:52px;margin:0;padding:12px 14px;
+  font-family:inherit;font-size:16px;line-height:1.35;
+  text-align:left;white-space:nowrap;
+  -webkit-appearance:none;appearance:none;color-scheme:dark;
+}
+.sheet #date::-webkit-date-and-time-value{min-height:1.35em;text-align:left;margin:0;padding:0}
+.sheet #date::-webkit-calendar-picker-indicator{flex:0 0 auto;margin-inline-start:8px;opacity:.9;filter:invert(1)}
+.sheet #orderForm{width:100%;max-width:100%;min-width:0}
+
 </style></head><body>
 <header class="hero"><img src="assets/hero-new.jpg" alt="BEAR MODE — Еда с характером. Домашние сеты и доставка по Нячангу" fetchpriority="high" decoding="async"></header>
 <main class="wrap"><div class="special-note"><div class="special-note-main">❤️ Есть особые пожелания? Напиши их в комментарии к заказу — мы обязательно постараемся всё учесть!</div><div class="special-note-brand">BEAR MODE — готовим с заботой о каждом! 🐾</div></div><div class="intro"><div><h2>🐻 Выбирай готовый сет по вкусу</h2><p>Свежая домашняя еда — вкусно и сытно</p></div></div><section class="cards" id="products"></section>
