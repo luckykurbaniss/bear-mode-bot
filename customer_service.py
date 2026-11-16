@@ -495,9 +495,8 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
         return
     if _admin(update) or message.text.startswith("/"):
         return
-    # Do not intercept text while the customer is completing the legacy bot order flow.
-    if any(key in context.user_data for key in ("set_id", "quantity", "name", "phone", "address", "comment")):
-        return
+    # Customer support is independent of stale legacy-order state. Never
+    # drop a customer's message because old conversation keys remain in user_data.
 
     # Every ordinary customer text must reach the administrator, including
     # messages that also receive an automatic FAQ answer.
