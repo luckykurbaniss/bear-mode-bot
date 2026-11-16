@@ -472,9 +472,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         # A new Grab ID request supersedes any stale tracking-link request.
         context.chat_data.pop("pending_grab_tracking", None)
         prompt = await q.message.reply_text(
-            f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение.\n"
-            "Это именно ID, не ссылка. Например, отправьте код/номер, который выдал Grab.\n"
-            "Если передумали, просто не отправляйте ответ."
+            f"Отправьте Grab ID для заказа №{order_id} ответом на это сообщение."
         )
         # Keep the pending request per chat so callback and reply updates share it.
         context.chat_data["pending_grab_reference"] = {
