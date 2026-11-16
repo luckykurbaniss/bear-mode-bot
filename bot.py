@@ -1,5 +1,4 @@
 import asyncio
-import math
 import os
 import logging
 import re
@@ -8,8 +7,7 @@ import sqlite3
 import hashlib
 import hmac
 import time
-from urllib.parse import parse_qsl, quote, urlsplit
-import aiohttp
+from urllib.parse import parse_qsl
 from aiohttp import web
 
 from datetime import datetime, date
@@ -42,133 +40,6 @@ API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
-
-BEAR_MODE_PICKUP_COORDS = "12.248668,109.193710"
-GOOGLE_MAPS_HOSTS = {"maps.app.goo.gl", "goo.gl", "google.com", "www.google.com", "maps.google.com"}
-
-
-def validate_customer_map_link(value: str) -> str:
-    """Accept only HTTPS Google Maps share or place links."""
-    parsed = urlsplit(value)
-    host = (parsed.hostname or "").lower()
-    valid_host = host in GOOGLE_MAPS_HOSTS or host.endswith(".google.com")
-    valid_path = (
-        host == "maps.app.goo.gl"
-        or host == "goo.gl" and parsed.path.startswith("/maps")
-        or host.endswith("google.com") and (
-            "/maps" in parsed.path or parsed.path.startswith("/url")
-        )
-    )
-    if parsed.scheme != "https" or not valid_host or not valid_path:
-        raise ValueError("Укажите ссылку Google Maps через «Поделиться» → «Копировать ссылку».")
-    return value
-
-
-def google_maps_route_url(customer_map_link: str) -> str:
-    """Build a Google Maps driving-directions link from the BEAR MODE pickup."""
-    return (
-        "https://www.google.com/maps/dir/?api=1"
-        f"&origin={quote(BEAR_MODE_PICKUP_COORDS, safe=',')}"
-        f"&destination={quote(customer_map_link, safe='')}"
-        "&travelmode=driving"
-    )
-
-
-
-async def estimate_customer_route(customer_map_link: str):
-    """Resolve Google Maps links broadly, route from pickup, and estimate GrabExpress fare."""
-    from urllib.parse import urljoin, unquote
-
-    current_url = customer_map_link
-    timeout = aiohttp.ClientTimeout(total=18, connect=6)
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; BEARMODE-Delivery/1.0)"}
-    try:
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            html = ""
-            # Resolve short links and follow only Google-owned redirects.
-            for _ in range(10):
-                parsed = urlsplit(current_url)
-                host = (parsed.hostname or "").lower()
-                if parsed.scheme != "https" or not (host in GOOGLE_MAPS_HOSTS or host.endswith(".google.com")):
-                    return None
-                async with session.get(current_url, allow_redirects=False) as response:
-                    if response.status in {301, 302, 303, 307, 308}:
-                        location = response.headers.get("Location")
-                        if not location:
-                            return None
-                        current_url = urljoin(current_url, location)
-                        continue
-                    if response.status >= 400:
-                        return None
-                    html = await response.text(errors="ignore")
-                    break
-            else:
-                return None
-
-            # Google links encode coordinates in several URL and page-data formats.
-            source = unquote(current_url + "\\n" + html)
-            patterns = (
-                r"@(-?\\d{1,2}\\.\\d+),\\s*(-?\\d{1,3}\\.\\d+)",
-                r"!3d(-?\\d{1,2}\\.\\d+)!4d(-?\\d{1,3}\\.\\d+)",
-                r"(?:center|destination|query|q)=(-?\\d{1,2}\\.\\d+)[,%2C]+(-?\\d{1,3}\\.\\d+)",
-                r"\\[(-?\\d{1,2}\\.\\d+),\\s*(-?\\d{1,3}\\.\\d+)\\]",
-            )
-            coords = None
-            for pattern in patterns:
-                match = re.search(pattern, source, re.IGNORECASE)
-                if match:
-                    candidate = (float(match.group(1)), float(match.group(2)))
-                    if -90 <= candidate[0] <= 90 and -180 <= candidate[1] <= 180:
-                        coords = candidate
-                        break
-
-            # If Google provides a place/address but no coordinates, geocode its page title.
-            if coords is None:
-                title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.IGNORECASE | re.DOTALL)
-                page_title = re.sub(r"<[^>]+>", " ", title_match.group(1)) if title_match else ""
-                page_title = unquote(page_title).replace(" - Google Maps", "").strip()
-                if page_title:
-                    geo_url = "https://nominatim.openstreetmap.org/search"
-                    async with session.get(geo_url, params={"q": page_title + ", Nha Trang, Khanh Hoa, Vietnam", "format": "jsonv2", "limit": "1"}) as response:
-                        if response.status == 200:
-                            found = await response.json()
-                            if found:
-                                coords = (float(found[0]["lat"]), float(found[0]["lon"]))
-
-            if coords is None:
-                return None
-            lat, lon = coords
-            pickup_lat, pickup_lon = (float(x) for x in BEAR_MODE_PICKUP_COORDS.split(","))
-            route_url = (
-                "https://router.project-osrm.org/route/v1/driving/"
-                f"{pickup_lon},{pickup_lat};{lon},{lat}?overview=false"
-            )
-            async with session.get(route_url) as response:
-                if response.status != 200:
-                    return None
-                payload = await response.json()
-            routes = payload.get("routes") or []
-            if not routes:
-                return None
-            route = routes[0]
-            km = route["distance"] / 1000
-            minutes = max(1, round(route["duration"] / 60))
-
-            # GrabExpress Super Fast published Khánh Hòa tariff:
-            # 16,691 VND for first 3 km + 5,400 VND for each next km.
-            # Add 3,000 VND published additional service fee; surge can change the app price.
-            extra_km = max(0, math.ceil(km - 3))
-            fare = 16691 + extra_km * 5400 + 3000
-            fare = int(math.ceil(fare / 1000.0) * 1000)
-            return (
-                f"🛣 Маршрут: {km:.1f} км · около {minutes} мин. на авто"
-                f"\\n💸 Ориентир GrabExpress: {fare:,} ₫".replace(",", ".")
-                + "\\n(по опубликованному тарифу Khánh Hòa; динамическая цена Grab может отличаться)"
-            )
-    except Exception:
-        log.warning("Could not estimate GrabExpress fare from Google Maps link", exc_info=True)
-        return None
-
 
 SETS = {
     "1": {
@@ -1018,7 +889,6 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         customer_name = str(order.get("customer_name", "")).strip()
         phone = str(order.get("phone", "")).strip()
         address = str(order.get("address", "")).strip()
-        address = validate_customer_map_link(address)
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
         submission_id = str(order.get("submission_id", "")).strip()
@@ -1141,13 +1011,9 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(
             chat_id=int(ADMIN_CHAT_ID),
             text=admin_text,
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton("📍 Открыть адрес клиента", url=address),
-                    InlineKeyboardButton("🗺 Маршрут от BEAR MODE", url=google_maps_route_url(address)),
-                ],
-                [InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]
-            ])
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
+            ]])
         )
         with db_connect() as conn:
             conn.execute("UPDATE orders SET admin_notified = 1 WHERE id = ?", (order_id,))
@@ -1220,8 +1086,6 @@ async def _order_api_unlocked(request):
         customer_name = str(order.get("customer_name", "")).strip()
         phone = str(order.get("phone", "")).strip()
         address = str(order.get("address", "")).strip()
-        address = validate_customer_map_link(address)
-        route_estimate = await estimate_customer_route(address)
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
         submission_id = str(order.get("submission_id", "")).strip()
@@ -1322,9 +1186,7 @@ async def _order_api_unlocked(request):
             f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
             + f"\n💰 ИТОГО К ОПЛАТЕ: {total:,} ₫".replace(",", ".")
             + f"\n\n👤 Имя: {customer_name}\n📱 Телефон: {phone}"
-            + f"\n📍 Адрес: {address}"
-            + (f"\n{route_estimate}" if route_estimate else "\n🛣 Расстояние: не удалось определить по ссылке — проверьте маршрут вручную.")
-            + f"\n📅 Дата доставки: {delivery_date}"
+            + f"\n📍 Адрес: {address}\n📅 Дата доставки: {delivery_date}"
             + f"\n💳 Способ оплаты: {payment_method_label}"
             + f"\n💰 Статус оплаты: {payment_status_label}"
             + f"\n💬 Комментарий: {comment or 'Нет'}"
@@ -1333,13 +1195,9 @@ async def _order_api_unlocked(request):
         try:
             await request.app["bot"].send_message(
                 chat_id=int(ADMIN_CHAT_ID), text=admin_text,
-                reply_markup=InlineKeyboardMarkup([
-                    [
-                        InlineKeyboardButton("📍 Открыть адрес клиента", url=address),
-                        InlineKeyboardButton("🗺 Маршрут от BEAR MODE", url=google_maps_route_url(address)),
-                    ],
-                    [InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]
-                ])
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
+                ]])
             )
             with db_connect() as conn:
                 conn.execute("UPDATE orders SET admin_notified = 1 WHERE id = ?", (order_id,))
