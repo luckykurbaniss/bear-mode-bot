@@ -222,6 +222,8 @@ def init_db():
             conn.execute("ALTER TABLE orders ADD COLUMN admin_notified INTEGER NOT NULL DEFAULT 0")
         if "customer_username" not in columns:
             conn.execute("ALTER TABLE orders ADD COLUMN customer_username TEXT")
+        if "manual_status_override" not in columns:
+            conn.execute("ALTER TABLE orders ADD COLUMN manual_status_override INTEGER NOT NULL DEFAULT 0")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_submission_id ON orders(submission_id) WHERE submission_id IS NOT NULL")
         # One-time rollback of the former fixed delivery charge from existing orders.
         # New orders no longer store or add a delivery fee.
