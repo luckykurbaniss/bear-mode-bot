@@ -1083,6 +1083,30 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
             (*updates.values(), order_id),
         )
     context.chat_data.pop("pending_order_edit", None)
+
+    # For delivery-fee entry, remove both the temporary prompt and the
+    # administrator's submitted amount after it has been saved successfully.
+    if field == "delivery_fee":
+        temporary_ids = [pending.get("prompt_id"), message.message_id]
+        for temporary_id in temporary_ids:
+            if not temporary_id:
+                continue
+            try:
+                await context.bot.delete_message(
+                    chat_id=message.chat_id,
+                    message_id=temporary_id,
+                )
+            except BadRequest as exc:
+                log.info(
+                    "Could not delete temporary delivery-fee message %s: %s",
+                    temporary_id, exc,
+                )
+            except Exception:
+                log.exception(
+                    "Failed to delete temporary delivery-fee message %s",
+                    temporary_id,
+                )
+
     if order["customer_chat_id"]:
         try:
             await context.bot.send_message(
