@@ -284,11 +284,11 @@ def _order_keyboard(order):
             )
         ])
     rows.extend([
-        [InlineKeyboardButton(("✅ " if show_progress and order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
-        [InlineKeyboardButton(("✅ " if show_progress and order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
-        [InlineKeyboardButton(("✅ " if show_progress and order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
-        [InlineKeyboardButton(("✅ " if courier_stage_reached or (show_progress and order["grab_status"] in {"picked_up", "delivered"}) else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
-        [InlineKeyboardButton(("✅ " if show_progress and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
+        [InlineKeyboardButton(("✅ " if ready_stage_reached and order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
+        [InlineKeyboardButton(("✅ " if courier_stage_reached and order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
+        [InlineKeyboardButton(("✅ " if ready_stage_reached and order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
+        [InlineKeyboardButton(("✅ " if courier_stage_reached and order["grab_status"] in {"picked_up", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
+        [InlineKeyboardButton(("✅ " if courier_stage_reached and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
         [InlineKeyboardButton(("✅ " if show_progress and order["status"] == "delivered" else "🏡 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
         [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
         [InlineKeyboardButton("💬 Переписка", callback_data=f"support:history:{order_id}")],
