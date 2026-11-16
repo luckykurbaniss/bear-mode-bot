@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from telegram import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
-from customer_service import support_order_button
+from customer_service import delete_order_decision_notice, support_order_button
 
 log = logging.getLogger(__name__)
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
@@ -655,6 +655,11 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             except Exception:
                 notification_error = True
                 log.exception("Could not notify customer about order status: order_id=%s status=%s customer_chat_id=%s", order_id, action, customer_chat_id)
+
+    if action == "delivered":
+        # The temporary admin message confirming the customer's initial decision
+        # is no longer needed once the order has reached its final delivered stage.
+        await delete_order_decision_notice(context.bot, order_id)
 
     updated = _get_order(order_id)
     # Keep exactly one live order card: replace its text and keyboard in place.
