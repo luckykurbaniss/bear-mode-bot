@@ -278,8 +278,8 @@ def remove_shop_reminder_ids(chat_id, message_ids=None):
 
 
 def save_order(customer_chat_id, customer_name, phone, address, delivery_date, delivery_time, comment, items_text, total, payment_method="cash", submission_id=None, customer_username=None):
-    if payment_method not in {"cash", "qr"}:
-        raise ValueError("Invalid payment method")
+    if payment_method != "cash":
+        raise ValueError("Доступна только оплата наличными при получении.")
     with db_connect() as conn:
         cur = conn.execute(
             """INSERT INTO orders
@@ -366,10 +366,7 @@ def admin_order_keyboard(order_id, status):
 def order_card_text(order):
     label = ORDER_STATUSES.get(order["status"], (order["status"], ""))[0]
     payment_method = order["payment_method"] if "payment_method" in order.keys() else "cash"
-    payment_method_label = (
-        "Перевод по QR-коду Vietcombank" if payment_method == "qr"
-        else "Наличные при получении"
-    )
+    payment_method_label = "Наличные при получении"
     payment_status = order["payment_status"] if "payment_status" in order.keys() else "unpaid"
     payment_status_label = (
         "Клиент отметил оплату — проверить поступление"
@@ -895,13 +892,10 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", submission_id):
             raise ValueError("Некорректный идентификатор отправки заказа.")
         payment_method = str(order.get("payment_method", "cash")).strip()
-        if payment_method not in {"cash", "qr"}:
-            raise ValueError("Invalid payment method")
-        payment_label = "Наличные при получении" if payment_method == "cash" else "Перевод по QR-коду Vietcombank"
-        payment_confirmed = order.get("payment_confirmed") is True
-        if payment_method == "qr" and not payment_confirmed:
-            raise ValueError("QR payment has not been confirmed by the customer")
-        payment_status = "Клиент отметил оплату — проверить поступление" if payment_method == "qr" else "Оплата при получении"
+        if payment_method != "cash":
+            raise ValueError("Доступна только оплата наличными при получении.")
+        payment_label = "Наличные при получении"
+        payment_status = "Оплата при получении"
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Required customer or delivery fields are missing")
@@ -1092,19 +1086,10 @@ async def _order_api_unlocked(request):
         if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", submission_id):
             raise ValueError("Некорректный идентификатор отправки заказа.")
         payment_method = str(order.get("payment_method", "cash")).strip()
-        if payment_method not in {"cash", "qr"}:
-            raise ValueError("Некорректный способ оплаты.")
-        payment_confirmed = order.get("payment_confirmed") is True
-        if payment_method == "qr" and not payment_confirmed:
-            raise ValueError("Сначала подтвердите оплату по QR-коду или выберите наличные.")
-        payment_method_label = (
-            "Перевод по QR-коду Vietcombank" if payment_method == "qr"
-            else "Наличные при получении"
-        )
-        payment_status_label = (
-            "Клиент отметил оплату — проверить поступление"
-            if payment_method == "qr" else "Оплата при получении"
-        )
+        if payment_method != "cash":
+            raise ValueError("Доступна только оплата наличными при получении.")
+        payment_method_label = "Наличные при получении"
+        payment_status_label = "Оплата при получении"
         items = order.get("items", [])
         if not all([customer_name, phone, address, delivery_date]):
             raise ValueError("Заполните имя, телефон, адрес и дату доставки.")
