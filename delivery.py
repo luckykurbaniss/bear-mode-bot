@@ -20,7 +20,8 @@ DELIVERY_ACTIONS = {"grab_requested", "picked_up", "payment_received", "delivere
 ORDER_STATUS_TRANSITIONS = {
     "new": {"confirmed", "cancelled"},
     "confirmed": {"cooking", "cancelled"},
-    "cooking": {"cancelled"},
+    "cooking": {"ready", "cancelled"},
+    "ready": {"cancelled"},
     "courier": set(),
     "delivered": set(),
     "cancelled": set(),
@@ -39,10 +40,10 @@ def _manual_status_transition_allowed(order, next_status: str) -> bool:
     if next_status == current:
         return False
     if next_status == "cancelled":
-        return current in {"new", "confirmed", "cooking"}
+        return current in {"new", "confirmed", "cooking", "ready"}
     if current == "cancelled":
         return next_status == "new"
-    ranks = {"new": 0, "confirmed": 1, "cooking": 2, "courier": 3, "delivered": 4}
+    ranks = {"new": 0, "confirmed": 1, "cooking": 2, "ready": 3, "courier": 4, "delivered": 5}
     if current not in ranks or next_status not in ranks:
         return False
     if ranks[next_status] < ranks[current]:
@@ -125,7 +126,7 @@ def _set_value(order_id, column, value):
 def _order_text(order):
     order_status = {
         "new": "✅ Новый", "confirmed": "✅ Подтверждён",
-        "cooking": "✅ Готовится", "courier": "✅ Передан курьеру",
+        "cooking": "✅ Готовится", "ready": "✅ Готов", "courier": "✅ Передан курьеру",
         "delivered": "✅ Доставлен", "cancelled": "✅ Отменён",
     }.get(order["status"], order["status"])
     grab_status = {
@@ -214,12 +215,14 @@ def _order_keyboard(order):
     # Reflect the selected order status as completed stages in the main menu.
     # Cancelled orders visually reset all stage checkmarks without deleting data.
     show_progress = order["status"] != "cancelled"
-    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "courier", "delivered"}
-    cooking_stage_reached = show_progress and order["status"] in {"cooking", "courier", "delivered"}
+    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "ready", "courier", "delivered"}
+    cooking_stage_reached = show_progress and order["status"] in {"cooking", "ready", "courier", "delivered"}
+    ready_stage_reached = show_progress and order["status"] in {"ready", "courier", "delivered"}
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
     status_buttons = [
         ("✅ Подтверждён" if confirmed_stage_reached else "🤝 Подтвердить", "confirmed"),
         ("✅ Готовится" if cooking_stage_reached else "🍳 Готовится", "cooking"),
+        ("✅ Готов" if ready_stage_reached else "🍱 Готов", "ready"),
     ]
     for start in range(0, len(status_buttons), 1):
         label, status = status_buttons[start]
@@ -269,8 +272,9 @@ def _order_status_keyboard(order):
     order_id = order["id"]
     rows = []
     show_progress = order["status"] != "cancelled"
-    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "courier", "delivered"}
-    cooking_stage_reached = show_progress and order["status"] in {"cooking", "courier", "delivered"}
+    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "ready", "courier", "delivered"}
+    cooking_stage_reached = show_progress and order["status"] in {"cooking", "ready", "courier", "delivered"}
+    ready_stage_reached = show_progress and order["status"] in {"ready", "courier", "delivered"}
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
 
     # Keep the exact same operational sequence as the main order card.
@@ -290,6 +294,12 @@ def _order_status_keyboard(order):
         InlineKeyboardButton(
             ("✅ " if cooking_stage_reached else "🍳 ") + "Готовится",
             callback_data=f"adm:edit:{order_id}:status:cooking",
+        )
+    ])
+    rows.append([
+        InlineKeyboardButton(
+            ("✅ " if ready_stage_reached else "🍱 ") + "Готов",
+            callback_data=f"adm:edit:{order_id}:status:ready",
         )
     ])
 
@@ -374,7 +384,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
                 await q.answer("Некорректный статус.", show_alert=True)
                 return
             new_status = parts[4]
-            valid_statuses = {"new", "confirmed", "cooking", "courier", "delivered", "cancelled"}
+            valid_statuses = {"new", "confirmed", "cooking", "ready", "courier", "delivered", "cancelled"}
             if new_status not in valid_statuses:
                 await q.answer("Неизвестный статус.", show_alert=True)
                 return
@@ -475,8 +485,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         if order["grab_reference"]:
             await q.answer("Grab ID уже указан. Повторно изменить его нельзя.", show_alert=True)
             return
-        if order["status"] != "cooking":
-            await q.answer("Сначала подтвердите заказ и отметьте «Готовится».", show_alert=True)
+        if order["status"] != "ready":
+            await q.answer("Сначала отметьте «Готовится», затем «Готов».", show_alert=True)
             return
 
         # Ignore rapid repeated taps: one active Grab ID prompt per order/chat.
@@ -558,8 +568,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             if current_grab != "not_requested":
                 await q.answer("Grab уже был вызван или курьер забрал заказ.", show_alert=True)
                 return
-            if order["status"] not in {"confirmed", "cooking"}:
-                await q.answer("Сначала подтвердите заказ и подготовьте его к передаче курьеру.", show_alert=True)
+            if order["status"] != "ready":
+                await q.answer("Сначала отметьте статус «Готов».", show_alert=True)
                 return
         if action == "payment_received" and current_grab != "requested":
             await q.answer("Сначала вызовите Grab.", show_alert=True)
@@ -588,6 +598,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             "new": "Мы получили ваш заказ и скоро свяжемся с вами для подтверждения.",
             "confirmed": "Ваш заказ подтверждён! Спасибо.",
             "cooking": "🍳 Ваш заказ взят в работу и уже готовится на кухне.",
+            "ready": "🍱 Ваш заказ готов! Мишки всё проверили и аккуратно упаковали!",
             "courier": "Ваш заказ передан курьеру и скоро будет у вас.",
             "delivered": "Ваш заказ отмечен как доставленный. Приятного аппетита!",
             "cancelled": "К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
@@ -736,9 +747,9 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
         context.chat_data.pop("pending_grab_reference", None)
         await message.reply_text("Заказ не найден. Откройте его заново в панели.")
         return
-    if order["status"] != "cooking":
+    if order["status"] != "ready":
         context.chat_data.pop("pending_grab_reference", None)
-        await message.reply_text("Сначала подтвердите заказ и отметьте «Готовится», затем укажите Grab ID.")
+        await message.reply_text("Сначала отметьте «Готовится», затем «Готов», и после этого укажите Grab ID.")
         return
     if order["grab_reference"]:
         context.chat_data.pop("pending_grab_reference", None)
