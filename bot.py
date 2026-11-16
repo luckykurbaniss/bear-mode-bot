@@ -545,10 +545,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # welcome/menu cycle below it, just like a new conversation start.
 
         welcome = (
-            "🐻 *BEAR MODE — еда с характером!* 🐼\n\n"
+            "🐻 Добро пожаловать в нашу берлогу BEAR MODE! 🐼\n\n"
             "Сытные домашние сеты и отдельные блюда в Нячанге 🇻🇳\n"
             "Выбирай готовый сет или собери свой заказ!\n\n"
-            "🔥 Готовые сеты — 170.000 ₫"
+            "🔥 Готовые сеты — 170.000 ₫\n"
+            "⏳ Заказы принимаем в любое время!\n"
+            "🛵 Доставка из нашей берлоги ежедневно с 13:00 до 20:00.\n\n"
+            "❤️ Готовим с душой, кормим от души и по-медвежьи щедро!"
         )
         shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261116-1"
         # Reply-keyboard Web Apps do not receive authenticated initData.
