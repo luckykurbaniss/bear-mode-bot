@@ -186,11 +186,7 @@ $('orderForm').onsubmit=async e=>{
  if(!form.reportValidity())return;
  const submitButton=form.querySelector('button[type="submit"]');
  if(submitButton.disabled)return;
- const initData=tg?.initData;
- if(!initData){
-  toast('Открой магазин кнопкой «Открыть магазин» в чате с ботом.');
-  return;
- }
+ const initData=tg?.initData||'';
  const payload={type:'bear_mode_order',items:catalog.filter(x=>cart[x.id]).map(x=>({id:x.id,quantity:cart[x.id]})),customer_name:$('name').value.trim(),phone:$('phone').value.trim(),address:$('address').value.trim(),delivery_date:$('date').value,comment:$('comment').value.trim(),payment_method:document.querySelector('input[name="payment_method"]:checked')?.value||'cash',payment_confirmed:qrPaymentConfirmed};
  const payloadFingerprint=JSON.stringify(payload);
  let pending=null;
@@ -200,6 +196,28 @@ $('orderForm').onsubmit=async e=>{
   try{localStorage.setItem(PENDING_SUBMISSION_KEY,JSON.stringify(pending))}catch(err){console.warn('Could not persist submission id:',err)}
  }
  payload.submission_id=pending.submission_id;
+ if(!initData){
+  // Older Telegram launch buttons may omit initData but still support sendData.
+  // Telegram authenticates the sender on the resulting web_app_data update.
+  if(tg&&typeof tg.sendData==='function'){
+   try{
+    orderSubmitting=true;
+    submitButton.disabled=true;
+    submitButton.textContent='Передаём заказ…';
+    tg.sendData(JSON.stringify(payload));
+    return;
+   }catch(err){
+    console.error('Telegram sendData failed:',err);
+    orderSubmitting=false;
+    submitButton.disabled=false;
+    submitButton.textContent='🐻 Отправить заказ';
+    toast('Не удалось передать заказ Telegram. Закройте магазин и откройте его кнопкой «Магазин» в чате с BEAR MODE.');
+    return;
+   }
+  }
+  toast('Telegram не передал данные запуска. Закройте магазин и откройте его кнопкой «Магазин» в чате с BEAR MODE.');
+  return;
+ }
  orderSubmitting=true;
  submitButton.disabled=true;
  submitButton.textContent='Отправляем заказ…';
