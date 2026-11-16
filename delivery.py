@@ -266,9 +266,9 @@ def _order_keyboard(order):
     # Reflect the selected order status as completed stages in the main menu.
     # Cancelled orders visually reset all stage checkmarks without deleting data.
     show_progress = order["status"] != "cancelled"
-    confirmed_stage_reached = show_progress and order["status"] == "confirmed"
-    cooking_stage_reached = show_progress and order["status"] == "cooking"
-    ready_stage_reached = show_progress and order["status"] == "ready"
+    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "ready", "courier", "delivered"}
+    cooking_stage_reached = show_progress and order["status"] in {"cooking", "ready", "courier", "delivered"}
+    ready_stage_reached = show_progress and order["status"] in {"ready", "courier", "delivered"}
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
     status_buttons = [
         ("✅ Подтверждён" if confirmed_stage_reached else "🤝 Подтвердить", "confirmed"),
@@ -324,9 +324,9 @@ def _order_status_keyboard(order):
     order_id = order["id"]
     rows = []
     show_progress = order["status"] != "cancelled"
-    confirmed_stage_reached = show_progress and order["status"] == "confirmed"
-    cooking_stage_reached = show_progress and order["status"] == "cooking"
-    ready_stage_reached = show_progress and order["status"] == "ready"
+    confirmed_stage_reached = show_progress and order["status"] in {"confirmed", "cooking", "ready", "courier", "delivered"}
+    cooking_stage_reached = show_progress and order["status"] in {"cooking", "ready", "courier", "delivered"}
+    ready_stage_reached = show_progress and order["status"] in {"ready", "courier", "delivered"}
     courier_stage_reached = show_progress and order["status"] in {"courier", "delivered"}
 
     # Keep the exact same operational sequence as the main order card.
