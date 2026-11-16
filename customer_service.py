@@ -499,20 +499,18 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
     if any(key in context.user_data for key in ("set_id", "quantity", "name", "phone", "address", "comment")):
         return
 
+    # Every ordinary customer text must reach the administrator, including
+    # messages that also receive an automatic FAQ answer.
     answer = _faq_answer(message.text)
-    if answer:
-        await message.reply_text(answer)
-        return
-
     order = _latest_order(chat.id)
     order_label = f"Заказ №{order['id']}" if order else "Заказ не найден"
     username = f"@{user.username}" if user.username else f"Telegram ID {user.id}"
     alert = (
-        "💬 ВОПРОС КЛИЕНТА BEAR MODE\n\n"
-        f"👤 {user.full_name}\n"
-        f"🔗 {username}\n"
-        f"🧾 {order_label}\n\n"
-        f"Сообщение:\n{message.text[:3000]}"
+        "💬 ВОПРОС КЛИЕНТА BEAR MODE\\n\\n"
+        f"👤 {user.full_name}\\n"
+        f"🔗 {username}\\n"
+        f"🧾 {order_label}\\n\\n"
+        f"Сообщение:\\n{message.text[:3000]}"
     )
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton(
@@ -520,14 +518,37 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
             callback_data=f"support:target:{chat.id}:{order['id'] if order else 0}",
         )
     ]])
+
     try:
-        await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=alert, reply_markup=keyboard)
+        if not ADMIN_CHAT_ID:
+            raise RuntimeError("ADMIN_CHAT_ID is empty")
+        await context.bot.send_message(
+            chat_id=int(ADMIN_CHAT_ID),
+            text=alert,
+            reply_markup=keyboard,
+        )
+        log.info(
+            "Customer message forwarded to admin: customer_chat_id=%s message_id=%s order_id=%s",
+            chat.id, message.message_id, order["id"] if order else None,
+        )
+    except Exception:
+        log.exception(
+            "Could not forward customer message to admin: customer_chat_id=%s message_id=%s",
+            chat.id, message.message_id,
+        )
+        if answer:
+            await message.reply_text(answer)
+        else:
+            await message.reply_text(
+                "Извините, сейчас не удалось передать сообщение администратору. "
+                "Пожалуйста, попробуйте ещё раз немного позже."
+            )
+        return
+
+    if answer:
+        await message.reply_text(answer)
+    else:
         await message.reply_text(
             "Спасибо за сообщение! ❤️ Передали ваш вопрос администратору BEAR MODE. "
             "Мы вернёмся к вам с ответом."
-        )
-    except Exception:
-        log.exception("Could not escalate customer message to admin")
-        await message.reply_text(
-            "Извините, сейчас не удалось передать сообщение. Пожалуйста, попробуйте ещё раз немного позже."
         )
