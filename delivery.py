@@ -698,8 +698,12 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
                 return
         context.chat_data.pop("pending_grab_tracking", None)
         updated = _get_order(tracking_order_id)
-        customer_chat_id = updated["customer_chat_id"]
-        if customer_chat_id:
+        # Once the URL is safely stored, run customer notification, order-card
+        # refresh, and cleanup of both temporary admin messages concurrently.
+        async def _send_customer_tracking():
+            customer_chat_id = updated["customer_chat_id"]
+            if not customer_chat_id:
+                return
             try:
                 await context.bot.send_message(
                     chat_id=customer_chat_id,
@@ -708,8 +712,11 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
                 )
             except Exception:
                 log.exception("Could not send Grab tracking link to customer for order %s", tracking_order_id)
-        card_id = tracking_pending.get("order_card_message_id")
-        if card_id:
+
+        async def _refresh_order_card():
+            card_id = tracking_pending.get("order_card_message_id")
+            if not card_id:
+                return
             try:
                 await context.bot.edit_message_text(
                     chat_id=message.chat_id,
@@ -720,11 +727,9 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
             except BadRequest as exc:
                 log.warning("Could not refresh order card after tracking URL save: %s", exc)
 
-        # Remove the temporary prompt and the admin's submitted URL only
-        # after the URL is saved and the order card has been refreshed.
-        for temporary_message_id in (tracking_pending.get("prompt_id"), message.message_id):
+        async def _delete_temporary_message(temporary_message_id):
             if not temporary_message_id:
-                continue
+                return
             try:
                 await context.bot.delete_message(
                     chat_id=message.chat_id,
@@ -735,6 +740,13 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
                     "Temporary Grab tracking message could not be deleted: chat_id=%s message_id=%s error=%s",
                     message.chat_id, temporary_message_id, exc,
                 )
+
+        await asyncio.gather(
+            _send_customer_tracking(),
+            _refresh_order_card(),
+            _delete_temporary_message(tracking_pending.get("prompt_id")),
+            _delete_temporary_message(message.message_id),
+        )
         return
 
     pending = context.chat_data.get("pending_grab_reference")
