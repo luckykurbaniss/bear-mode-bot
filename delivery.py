@@ -507,8 +507,13 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
                 conn.execute("UPDATE orders SET manual_status_override = 1 WHERE id = ?", (order_id,))
             # Manual status corrections are silent: update admin state only.
             updated = _get_order(order_id)
-            await q.edit_message_text(_order_text(updated), entities=_order_entities(updated), reply_markup=_order_keyboard(updated))
+            # Acknowledge the tap before the Telegram message edit round-trip.
             await q.answer("Статус заказа изменён")
+            await q.edit_message_text(
+                _order_text(updated),
+                entities=_order_entities(updated),
+                reply_markup=_order_keyboard(updated),
+            )
             return
         if order["status"] in {"delivered", "cancelled"}:
             await q.answer("Данные доставленного или отменённого заказа менять нельзя. Изменить можно только статус.", show_alert=True)
@@ -749,33 +754,50 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         notice = "🏡 Ваш заказ доставлен! Мишки желают вам приятного аппетита! 🥰"
 
     notification_error = False
+    customer_chat_id = order["customer_chat_id"] if "customer_chat_id" in order.keys() else None
+
+    # Refresh the admin card and stop Telegram's loading indicator before
+    # secondary network calls such as customer notifications and cleanup.
+    updated = _get_order(order_id)
+    await q.answer("Статус обновлён")
+    await q.message.edit_text(
+        _order_text(updated),
+        entities=_order_entities(updated),
+        reply_markup=_order_keyboard(updated),
+    )
+
     if notice:
-        customer_chat_id = order["customer_chat_id"] if "customer_chat_id" in order.keys() else None
         if not customer_chat_id:
             notification_error = True
-            log.error("Cannot send order status notification: customer_chat_id is missing (order_id=%s, status=%s)", order_id, action)
+            log.error(
+                "Cannot send order status notification: customer_chat_id is missing (order_id=%s, status=%s)",
+                order_id, action,
+            )
         else:
             try:
                 await context.bot.send_message(chat_id=customer_chat_id, text=notice)
-                log.info("Order status notification sent: order_id=%s status=%s customer_chat_id=%s", order_id, action, customer_chat_id)
+                log.info(
+                    "Order status notification sent: order_id=%s status=%s customer_chat_id=%s",
+                    order_id, action, customer_chat_id,
+                )
             except Exception:
                 notification_error = True
-                log.exception("Could not notify customer about order status: order_id=%s status=%s customer_chat_id=%s", order_id, action, customer_chat_id)
+                log.exception(
+                    "Could not notify customer about order status: order_id=%s status=%s customer_chat_id=%s",
+                    order_id, action, customer_chat_id,
+                )
 
     if action == "delivered":
-        # The temporary admin message confirming the customer's initial decision
-        # is no longer needed once the order has reached its final delivered stage.
-        await delete_order_decision_notice(context.bot, order_id)
+        try:
+            await delete_order_decision_notice(context.bot, order_id)
+        except Exception:
+            log.exception("Could not delete order decision notice: order_id=%s", order_id)
 
-    updated = _get_order(order_id)
-    # Keep exactly one live order card: replace its text and keyboard in place.
-    await q.message.edit_text(_order_text(updated), entities=_order_entities(updated), reply_markup=_order_keyboard(updated))
-    await q.answer(
-        "Статус обновлён, но уведомление клиенту не отправлено. Проверьте Telegram клиента и журнал Railway."
-        if notification_error else "Статус обновлён"
-    )
-
-
+    if notification_error:
+        log.warning(
+            "Order status updated but customer notification failed: order_id=%s status=%s",
+            order_id, action,
+        )
 async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Save a Grab ID sent directly or as a reply to the active admin prompt."""
     message = update.effective_message
