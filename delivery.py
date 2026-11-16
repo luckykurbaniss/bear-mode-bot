@@ -266,7 +266,7 @@ def _order_keyboard(order):
         [InlineKeyboardButton(("✅ " if show_progress and order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
         [InlineKeyboardButton(("✅ " if courier_stage_reached or (show_progress and order["grab_status"] in {"picked_up", "delivered"}) else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
         [InlineKeyboardButton(("✅ " if show_progress and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
-        [InlineKeyboardButton(("✅ " if show_progress and order["status"] == "delivered" else "🎉 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
+        [InlineKeyboardButton(("✅ " if show_progress and order["status"] == "delivered" else "🏡 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
         [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
         support_order_button(order_id),
         [InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")],
@@ -358,7 +358,7 @@ def _order_status_keyboard(order):
 
     rows.append([
         InlineKeyboardButton(
-            ("✅ " if show_progress and order["status"] == "delivered" else "🎉 ") + "Доставлен",
+            ("✅ " if show_progress and order["status"] == "delivered" else "🏡 ") + "Доставлен",
             callback_data=f"adm:edit:{order_id}:status:delivered",
         )
     ])
