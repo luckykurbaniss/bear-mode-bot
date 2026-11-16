@@ -365,14 +365,11 @@ def admin_order_keyboard(order_id, status):
 
 def order_card_text(order):
     label = ORDER_STATUSES.get(order["status"], (order["status"], ""))[0]
-    payment_method = order["payment_method"] if "payment_method" in order.keys() else "cash"
     payment_method_label = "Наличные при получении"
     payment_status = order["payment_status"] if "payment_status" in order.keys() else "unpaid"
     payment_status_label = (
-        "Клиент отметил оплату — проверить поступление"
-        if payment_method == "qr" and payment_status != "received"
-        else ("Оплачено / получено" if payment_status == "received"
-              else "Ожидается при получении")
+        "Оплачено / получено" if payment_status == "received"
+        else "Оплата при получении"
     )
     return (
         f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\n\n"
