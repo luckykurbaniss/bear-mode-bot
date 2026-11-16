@@ -195,8 +195,8 @@ def _format_template(template_id, order):
         # Keep the exact delivery address and item list from the order.
         text = (
             "🐻 Топ-топ! Медвежья доставка на связи! 🐼\n\n"
-            "Большой привет от BEAR MODE! ❤️\n\n"
-            "Ваш заказ успешно попал в наши лапки! 🐾\n\n"
+            "Большой привет от BEAR MODE ❤️\n\n"
+            "Ваш заказ успешно попал в наши лапки 🐾\n\n"
             "Осталось проверить детали, чтобы наши мишки ничего не перепутали.\n\n"
             "🍯 ВАША МЕДВЕЖЬЯ КОРЗИНКА:\n\n"
             f"📍 Адрес: {address}\n\n"
