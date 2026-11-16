@@ -845,6 +845,7 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
         tasks.append(context.bot.send_message(
             chat_id=message.chat_id,
             text=_order_text(updated),
+            entities=_order_entities(updated),
             reply_markup=_order_keyboard(updated),
         ))
         task_kinds.append(("card", None))
