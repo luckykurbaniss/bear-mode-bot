@@ -450,7 +450,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer("Заказ не найден.", show_alert=True)
             return
         prompt = await q.message.reply_text(
-            f"💰 Укажите стоимость доставки для заказа №{order_id} в VND (только число, например 25000)."
+            f"💰 Укажите стоимость доставки для заказа №{order_id} в VND."
         )
         context.chat_data["pending_order_edit"] = {
             "order_id": order_id,
