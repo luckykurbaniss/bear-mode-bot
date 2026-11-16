@@ -61,8 +61,8 @@ def _payment_qr_png():
             row.extend((0, 0, 0) if black else (255, 255, 255))
         rows.append(bytes(row))
     raw = b"".join(rows)
-    header = struct.pack(">2I", full, full) + b"\\x08\\x02\\x00\\x00\\x00"
-    png = b"\\x89PNG\\r\\n\\x1a\\n" + _png_chunk(b"IHDR", header)
+    header = struct.pack(">2I", full, full) + bytes([8, 2, 0, 0, 0])
+    png = bytes([137, 80, 78, 71, 13, 10, 26, 10]) + _png_chunk(b"IHDR", header)
     png += _png_chunk(b"IDAT", zlib.compress(raw, 9)) + _png_chunk(b"IEND", b"")
     return BytesIO(png)
 
