@@ -187,24 +187,29 @@ def _format_template(template_id, order):
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
-        # Сохраняем точную ссылку Google Maps, которую клиент указал при оформлении заказа.
+        payment_line = (
+            "💳 Оплата: перевод по QR-коду Vietcombank"
+            if template_id == "welcome_confirm_qr"
+            else "💵 Оплата: при получении"
+        )
+        # Keep the exact delivery address and item list from the order.
         text = (
-            "🐻 Большой медвежий привет от BEAR MODE! 🐼\n\n"
-            "Ваш заказ уже в наших лапках! 🐾\n\n"
-            "📋 А теперь давайте вместе проверим детали вашего заказа, "
-            "чтобы всё было правильно! 😊\n\n"
-            f"📍 Адрес: {address}\n"
-            f"🍱 Заказ: {items}\n"
-            f"🧾 Номер заказа: №{order['id']}\n"
-            f"💰 Итого к оплате: {total}\n"
-            
-            + (
-                "💳 Оплата: перевод по QR-коду Vietcombank ✅\n\n"
-                if template_id == "welcome_confirm_qr"
-                else "💵 Оплата: ожидается при получении\n\n"
-            )
-            + "Если всё верно, пожалуйста, подтвердите заказ — и мы сразу возьмём его в работу. "
-            "Следите за статусом в боте ❤️"
+            "🐻 Топ-топ! Медвежья доставка на связи! 🐼\n\n"
+            "Большой привет от BEAR MODE! ❤️\n\n"
+            "Ваш заказ успешно попал в наши лапки! 🐾\n\n"
+            "Осталось проверить детали, чтобы наши мишки ничего не перепутали.\n\n"
+            "🍯 ВАША МЕДВЕЖЬЯ КОРЗИНКА:\n\n"
+            f"📍 Адрес: {address}\n\n"
+            f"🍱 {items}\n\n"
+            f"🧾 Заказ №{order['id']}\n\n"
+            f"💰 Итого: {total}\n\n"
+            f"{payment_line}\n\n"
+            "━━━━━━━━━━━━━━\n\n"
+            "🐾 Если всё верно — подтвердите заказ!\n\n"
+            "А дальше дело за нами: приготовим с душой, аккуратно упакуем "
+            "и передадим ваш заказ в дорогу.\n\n"
+            "Спасибо, что заглянули в нашу медвежью берлогу! 🏡❤️\n\n"
+            "💪 BEAR MODE — ВКЛЮЧАЕМ МЕДВЕЖЬЮ СИЛУ! 🐻🐼"
         )
     elif order and template_id == "total":
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
@@ -212,7 +217,6 @@ def _format_template(template_id, order):
     elif "{total}" in text:
         text = text.replace("{total}", "уточним после проверки заказа")
     return text
-
 
 async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
