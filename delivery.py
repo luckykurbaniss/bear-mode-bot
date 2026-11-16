@@ -447,6 +447,9 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
                 await q.answer("Нельзя пропустить этап. Сначала выполните предыдущие действия или вернитесь на предыдущий статус.", show_alert=True)
                 return
             _set_value(order_id, "status", new_status)
+            # Manual status selection displays only that selected stage in the main menu.
+            with db_connect() as conn:
+                conn.execute("UPDATE orders SET manual_status_override = 1 WHERE id = ?", (order_id,))
             # Manual status corrections are silent: update admin state only.
             updated = _get_order(order_id)
             await q.edit_message_text(_order_text(updated), entities=_order_entities(updated), reply_markup=_order_keyboard(updated))
@@ -665,6 +668,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer("Неизвестный статус.", show_alert=True)
             return
         _set_value(order_id, "status", action)
+        with db_connect() as conn:
+            conn.execute("UPDATE orders SET manual_status_override = 0 WHERE id = ?", (order_id,))
         notice = status_messages[action]
     elif action == "grab_requested":
         previous_status = order["grab_status"] or "not_requested"
@@ -676,12 +681,16 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
     elif action == "picked_up":
         _set_value(order_id, "grab_status", "picked_up")
         _set_value(order_id, "status", "courier")
+        with db_connect() as conn:
+            conn.execute("UPDATE orders SET manual_status_override = 0 WHERE id = ?", (order_id,))
         notice = "🛵 Ваш заказ уже у курьера! Медвежьи вкусняшки едут к вам! 🍯"
     elif action == "payment_received":
         _set_value(order_id, "payment_status", "received")
     elif action == "delivered":
         _set_value(order_id, "grab_status", "delivered")
         _set_value(order_id, "status", "delivered")
+        with db_connect() as conn:
+            conn.execute("UPDATE orders SET manual_status_override = 0 WHERE id = ?", (order_id,))
         notice = "🏡 Ваш заказ доставлен! Мишки желают вам приятного аппетита! 🥰"
 
     notification_error = False
