@@ -569,7 +569,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         sent_ids = []
         msg = await update.message.reply_text(
-            welcome, parse_mode="Markdown", reply_markup=ReplyKeyboardRemove()
+            welcome, parse_mode=None, reply_markup=ReplyKeyboardRemove()
         )
         sent_ids.append(msg.message_id)
         msg = await update.message.reply_text(
