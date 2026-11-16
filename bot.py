@@ -884,6 +884,9 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         address = str(order.get("address", "")).strip()
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
+        submission_id = str(order.get("submission_id", "")).strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{8,80}", submission_id):
+            raise ValueError("Некорректный идентификатор отправки заказа.")
         payment_method = str(order.get("payment_method", "cash")).strip()
         if payment_method not in {"cash", "qr"}:
             raise ValueError("Invalid payment method")
@@ -947,23 +950,66 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         if user:
             admin_text += f"\n\nTelegram клиента: {('@' + user.username) if user.username else user.id}"
 
-        order_id = save_order(
-            user.id if user else None, customer_name, phone, address,
-            delivery_date, "", comment, ", ".join(saved_items), total,
-            payment_method=payment_method
-        )
-        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
-        try:
-            await context.bot.send_message(
-                chat_id=int(ADMIN_CHAT_ID),
-                text=admin_text,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
-                ]])
+        if not user:
+            raise ValueError("Не удалось определить Telegram клиента.")
+
+        incoming_items = ", ".join(saved_items)
+        with db_connect() as conn:
+            existing = conn.execute(
+                "SELECT * FROM orders WHERE submission_id = ?",
+                (submission_id,),
+            ).fetchone()
+
+        if existing:
+            order_id = existing["id"]
+            same_payload = (
+                existing["customer_chat_id"] == user.id
+                and existing["customer_name"] == customer_name
+                and existing["phone"] == phone
+                and existing["address"] == address
+                and existing["delivery_date"] == delivery_date
+                and (existing["comment"] or "") == comment
+                and existing["items_text"] == incoming_items
+                and int(existing["total"]) == total
+                and existing["payment_method"] == payment_method
             )
-        except Exception:
-            delete_order(order_id)
-            raise
+            if not same_payload:
+                raise ValueError("Этот запрос уже использован для другого заказа.")
+            if existing["admin_notified"]:
+                await message.reply_text(f"✅ Заказ №{order_id} уже принят. Повторно отправлять его не нужно.")
+                return
+        else:
+            try:
+                order_id = save_order(
+                    user.id, customer_name, phone, address,
+                    delivery_date, "", comment, incoming_items, total,
+                    payment_method=payment_method,
+                    submission_id=submission_id,
+                    customer_username=(user.username or None),
+                )
+            except sqlite3.IntegrityError:
+                with db_connect() as conn:
+                    existing = conn.execute(
+                        "SELECT * FROM orders WHERE submission_id = ?",
+                        (submission_id,),
+                    ).fetchone()
+                if not existing:
+                    raise
+                order_id = existing["id"]
+                if existing["admin_notified"]:
+                    await message.reply_text(f"✅ Заказ №{order_id} уже принят. Повторно отправлять его не нужно.")
+                    return
+
+        admin_text = f"🧾 Номер заказа: №{order_id}\n\n" + admin_text
+        await context.bot.send_message(
+            chat_id=int(ADMIN_CHAT_ID),
+            text=admin_text,
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
+            ]])
+        )
+        with db_connect() as conn:
+            conn.execute("UPDATE orders SET admin_notified = 1 WHERE id = ?", (order_id,))
         try:
             await send_order_welcome(context.bot, order_id)
         except Exception:
