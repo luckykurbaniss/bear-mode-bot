@@ -194,6 +194,15 @@ def _parse_edited_items(raw_text):
 def _order_keyboard(order):
     order_id = order["id"]
     rows = []
+    # If the customer cancelled, show a persistent, read-only marker at the top
+    # of the admin card, before the normal order workflow buttons.
+    if order["status"] == "cancelled":
+        rows.append([
+            InlineKeyboardButton(
+                "✅ Отменён",
+                callback_data=f"adm:order:{order_id}",
+            )
+        ])
     # Reflect the selected order status as completed stages in the main menu.
     # Cancelled orders visually reset all stage checkmarks without deleting data.
     show_progress = order["status"] != "cancelled"
