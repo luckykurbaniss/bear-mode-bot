@@ -444,6 +444,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rows = []
         for order in orders:
             label = ORDER_STATUSES.get(order["status"], (order["status"],))[0]
+            if order["status"] == "cancelled":
+                label = "❌ Заказ отменён"
+            elif order["status"] == "confirmed":
+                label = "✅ Заказ подтверждён"
             rows.append([InlineKeyboardButton(f"№{order['id']} · {order['customer_name'][:16]} · {label}",
                                                callback_data=f"adm:order:{order['id']}")])
         nav = []
