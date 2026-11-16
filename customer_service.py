@@ -164,7 +164,16 @@ async def customer_order_confirmation_callback(update: Update, context: ContextT
     await q.message.reply_text(customer_text)
     if ADMIN_CHAT_ID:
         try:
-            await context.bot.send_message(chat_id=int(ADMIN_CHAT_ID), text=admin_text)
+            await context.bot.send_message(
+                chat_id=int(ADMIN_CHAT_ID),
+                text=admin_text,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "📂 Открыть отменённый заказ",
+                        callback_data=f"adm:order:{order_id}",
+                    )
+                ]]),
+            )
         except Exception:
             log.exception("Could not notify admin about customer order decision")
     await q.answer("Готово")
