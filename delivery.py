@@ -123,6 +123,26 @@ def _set_value(order_id, column, value):
         conn.execute(f"UPDATE orders SET {column} = ? WHERE id = ?", (value, order_id))
 
 
+def _catalog_copy_entities(text):
+    """Make every catalog item name and price independently selectable/copyable."""
+    entities = []
+    for name, price in EDITABLE_CATALOG.items():
+        amount = f"{price:,}".replace(",", ".") + " ₫"
+        line = f"• {name} — {amount}"
+        line_index = text.find(line)
+        if line_index < 0:
+            continue
+        for value, relative_start in (
+            (name, line_index + 2),
+            (amount, line_index + len(f"• {name} — ")),
+        ):
+            offset = len(text[:relative_start].encode("utf-16-le")) // 2
+            length = len(value.encode("utf-16-le")) // 2
+            if length:
+                entities.append(MessageEntity(type=MessageEntity.CODE, offset=offset, length=length))
+    return entities
+
+
 def _order_entities(order, prefix=""):
     """Make the name and phone independently selectable as code-formatted fields."""
     text = prefix + _order_text(order)
@@ -466,9 +486,14 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer("Неизвестное поле.", show_alert=True)
             return
         label, prompt_text = prompts[field]
-        prompt = await q.message.reply_text(
+        full_prompt_text = (
             f"✏️ Изменяем {label} заказа №{order_id}.\n\n{prompt_text}\n\n"
             "Можно ответить на это сообщение или просто отправить новое сообщение в чат."
+        )
+        prompt_entities = _catalog_copy_entities(full_prompt_text) if field == "items" else None
+        prompt = await q.message.reply_text(
+            full_prompt_text,
+            entities=prompt_entities,
         )
         context.chat_data["pending_order_edit"] = {
             "order_id": order_id,
