@@ -199,12 +199,18 @@ def _order_keyboard(order):
     # Keep cancellation visible at the top of a new order card.
     # Once cancelled, replace the action with a persistent status marker.
     if order["status"] == "cancelled":
+        # A customer-cancelled order is terminal: show only the cancellation
+        # marker and navigation. Do not leave confirmation or delivery actions.
         rows.append([
             InlineKeyboardButton(
-                "✅ Отменён",
+                "❌ Отменён",
                 callback_data=f"adm:order:{order_id}",
             )
         ])
+        rows.append([
+            InlineKeyboardButton("⬅️ К списку", callback_data="adm:list:all:0")
+        ])
+        return InlineKeyboardMarkup(rows)
     elif order["status"] == "new":
         rows.append([
             InlineKeyboardButton(
