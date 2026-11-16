@@ -548,7 +548,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Выбирай готовый сет или собери свой заказ!\n\n"
             "🔥 Готовые сеты — 170.000 ₫"
         )
-        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261115-4"
+        shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261116-1"
         # Reply-keyboard Web Apps do not receive authenticated initData.
         # Use the dedicated chat menu button, which launches a fully
         # authenticated Mini App session and preserves server-side validation.
@@ -1349,7 +1349,7 @@ async def main():
     await app.initialize()
     # Set the Mini App as the default menu button for all private chats.
     # Individual /start calls also set the same button for that specific chat.
-    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261115-5"
+    shop_url = WEB_APP_URL + ("&" if "?" in WEB_APP_URL else "?") + "v=20261116-1"
     await app.bot.set_chat_menu_button(
         menu_button=MenuButtonWebApp(
             text="Магазин",
