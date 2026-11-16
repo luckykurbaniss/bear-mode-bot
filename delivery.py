@@ -696,10 +696,27 @@ async def delivery_reference_message(update: Update, context: ContextTypes.DEFAU
         if reply and reply.message_id != tracking_pending["prompt_id"]:
             await message.reply_text("Ответьте на запрос ссылки Grab или отправьте ссылку обычным сообщением.")
             return
-        tracking_url = (message.text or "").strip()
+        raw_tracking_message = (message.text or "").strip()
+        # Accept either a bare URL or a sentence containing the Grab tracking URL.
+        # Store and send only the extracted URL, never the surrounding instruction text.
+        matches = re.findall(r"https?://[^\s<>]+", raw_tracking_message, flags=re.IGNORECASE)
+        if len(matches) != 1:
+            await message.reply_text(
+                "Не удалось найти одну ссылку Grab. Отправьте ссылку отдельно или вместе с текстом, например:\n"
+                "Отследи свою доставку! Посмотри маршрут и расчётное время прибытия в https://express.grab.com/..."
+            )
+            return
+        tracking_url = matches[0].rstrip(".,!?;:)]}»”’")
         parsed = urlsplit(tracking_url)
-        if parsed.scheme != "https" or not parsed.netloc or " " in tracking_url or len(tracking_url) > 2000:
-            await message.reply_text("Некорректная ссылка. Отправьте полную ссылку, начинающуюся с https://.")
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname not in {"express.grab.com", "www.express.grab.com"}
+            or not parsed.path
+            or len(tracking_url) > 2000
+        ):
+            await message.reply_text(
+                "Некорректная ссылка Grab. Проверьте, что она начинается с https://express.grab.com/."
+            )
             return
         tracking_order_id = tracking_pending["order_id"]
         tracking_order = _get_order(tracking_order_id)
