@@ -488,28 +488,52 @@ def _faq_answer(text):
 
 
 async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Forward every private customer message (text or media) to the admin."""
     message = update.effective_message
     user = update.effective_user
     chat = update.effective_chat
-    if not message or not message.text or not user or not chat or chat.type != "private":
+    if not message or not user or not chat or chat.type != "private":
         return
-    if _admin(update) or message.text.startswith("/"):
+    if _admin(update) or (message.text or "").startswith("/"):
         return
-    # Customer support is independent of stale legacy-order state. Never
-    # drop a customer's message because old conversation keys remain in user_data.
 
-    # Every ordinary customer text must reach the administrator, including
-    # messages that also receive an automatic FAQ answer.
-    answer = _faq_answer(message.text)
+    body = (message.text or message.caption or "").strip()
+    if not body:
+        if message.photo:
+            body = "[Фото]"
+        elif message.video:
+            body = "[Видео]"
+        elif message.voice:
+            body = "[Голосовое сообщение]"
+        elif message.audio:
+            body = "[Аудио]"
+        elif message.document:
+            body = f"[Файл: {message.document.file_name or 'без названия'}]"
+        elif message.contact:
+            body = "[Контакт]"
+        elif message.location:
+            body = "[Геопозиция]"
+        elif message.sticker:
+            body = "[Стикер]"
+        else:
+            body = "[Вложение или сообщение другого типа]"
+
+    log.info(
+        "Incoming customer message detected: chat_id=%s message_id=%s content_type=%s",
+        chat.id, message.message_id, getattr(message, "effective_attachment", None).__class__.__name__
+        if getattr(message, "effective_attachment", None) is not None else ("text" if message.text else "other"),
+    )
+
+    answer = _faq_answer(body) if message.text else None
     order = _latest_order(chat.id)
     order_label = f"Заказ №{order['id']}" if order else "Заказ не найден"
     username = f"@{user.username}" if user.username else f"Telegram ID {user.id}"
     alert = (
-        "💬 ВОПРОС КЛИЕНТА BEAR MODE\n\n"
-        f"👤 {user.full_name}\n"
-        f"🔗 {username}\n"
-        f"🧾 {order_label}\n\n"
-        f"Сообщение:\n{message.text[:3000]}"
+        "💬 СООБЩЕНИЕ ОТ КЛИЕНТА BEAR MODE\\n\\n"
+        f"👤 {user.full_name}\\n"
+        f"🔗 {username}\\n"
+        f"🧾 {order_label}\\n\\n"
+        f"Сообщение:\\n{body[:3000]}"
     )
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton(
@@ -521,25 +545,34 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
     try:
         if not ADMIN_CHAT_ID:
             raise RuntimeError("ADMIN_CHAT_ID is empty")
-        await context.bot.send_message(
-            chat_id=int(ADMIN_CHAT_ID),
+        admin_chat_id = int(ADMIN_CHAT_ID)
+        sent = await context.bot.send_message(
+            chat_id=admin_chat_id,
             text=alert,
             reply_markup=keyboard,
         )
+        # Preserve the original media/attachment in the admin chat as well.
+        if not message.text and not message.contact and not message.location:
+            await context.bot.copy_message(
+                chat_id=admin_chat_id,
+                from_chat_id=chat.id,
+                message_id=message.message_id,
+                reply_to_message_id=sent.message_id,
+            )
         log.info(
-            "Customer message forwarded to admin: customer_chat_id=%s message_id=%s order_id=%s",
-            chat.id, message.message_id, order["id"] if order else None,
+            "Customer message forwarded successfully: customer_chat_id=%s message_id=%s admin_chat_id=%s order_id=%s",
+            chat.id, message.message_id, admin_chat_id, order["id"] if order else None,
         )
     except Exception:
         log.exception(
-            "Could not forward customer message to admin: customer_chat_id=%s message_id=%s",
-            chat.id, message.message_id,
+            "FAILED forwarding customer message: customer_chat_id=%s message_id=%s admin_chat_id_configured=%s",
+            chat.id, message.message_id, bool(ADMIN_CHAT_ID),
         )
         if answer:
             await message.reply_text(answer)
         else:
             await message.reply_text(
-                "Извините, сейчас не удалось передать сообщение администратору. "
+                "Извините, не удалось передать сообщение администратору. "
                 "Пожалуйста, попробуйте ещё раз немного позже."
             )
         return
@@ -548,6 +581,6 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text(answer)
     else:
         await message.reply_text(
-            "Спасибо за сообщение! ❤️ Передали ваш вопрос администратору BEAR MODE. "
+            "Спасибо за сообщение! ❤️ Передали его администратору BEAR MODE. "
             "Мы вернёмся к вам с ответом."
         )
