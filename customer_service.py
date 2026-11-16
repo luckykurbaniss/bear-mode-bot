@@ -649,8 +649,13 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
 
     if answer:
         await message.reply_text(answer)
+        if order:
+            _save_order_message(order["id"], "system", answer)
     else:
-        await message.reply_text(
+        acknowledgement = (
             "Спасибо за сообщение! ❤️ Передали его администратору BEAR MODE. "
             "Мы вернёмся к вам с ответом."
         )
+        await message.reply_text(acknowledgement)
+        if order:
+            _save_order_message(order["id"], "system", acknowledgement)
