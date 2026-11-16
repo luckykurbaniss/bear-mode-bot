@@ -152,10 +152,10 @@ async def customer_order_confirmation_callback(update: Update, context: ContextT
             return
         conn.execute("UPDATE orders SET status = ? WHERE id = ?", (new_status, order_id))
     if new_status == "confirmed":
-        customer_text = "✅ Спасибо! Вы подтвердили заказ. Мы начинаем его обработку."
+        customer_text = "🐻 Ура! Ваш заказ подтверждён! Мишки приступают к работе! ❤️"
         admin_text = f"✅ Клиент подтвердил заказ BEAR MODE №{order_id}."
     else:
-        customer_text = "❌ Заказ отменён. Если это ошибка, напишите нам @lucky_ranger."
+        customer_text = "🐻 Ваш заказ отменён. До новых встреч и вкусных моментов вместе с BEAR MODE! 🐼"
         admin_text = f"❌ Клиент отменил заказ BEAR MODE №{order_id}."
     try:
         await q.edit_message_reply_markup(reply_markup=None)
