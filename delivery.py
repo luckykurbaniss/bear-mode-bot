@@ -149,6 +149,7 @@ def _order_text(order):
         f"🕒 Создан: {order['created_at']}\n"
         f"👤 Имя: {order['customer_name']}\n"
         f"📱 Телефон: {order['phone']}\n"
+        f"🔗 Telegram: {'@' + order['customer_username'] if 'customer_username' in order.keys() and order['customer_username'] else ('ID ' + str(order['customer_chat_id']) if order['customer_chat_id'] else 'не указан')}\n"
         f"📍 Адрес: {order['address']}\n"
         f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
         f"🍱 Заказ: {order['items_text']}\n"
