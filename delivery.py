@@ -5,7 +5,7 @@ import sqlite3
 import re
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, quote
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, MessageEntity, Update
 from telegram.error import BadRequest
@@ -27,6 +27,18 @@ ORDER_STATUS_TRANSITIONS = {
     "cancelled": set(),
 }
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+BEAR_MODE_PICKUP_COORDS = "12.248668,109.193710"
+
+
+def _customer_route_url(address: str) -> str:
+    return (
+        "https://www.google.com/maps/dir/?api=1"
+        f"&origin={quote(BEAR_MODE_PICKUP_COORDS, safe=',')}"
+        f"&destination={quote(address, safe='')}"
+        "&travelmode=driving"
+    )
+
 
 
 def is_order_transition_allowed(current_status: str, next_status: str) -> bool:
@@ -241,6 +253,12 @@ def _order_keyboard(order):
     # Keep customer name and phone as plain text in the order card.
     # The admin can select the name directly from the message and copy it.
     rows = []
+    customer_map_link = str(order["address"] or "").strip()
+    if customer_map_link.startswith("https://"):
+        rows.append([
+            InlineKeyboardButton("📍 Открыть адрес клиента", url=customer_map_link),
+            InlineKeyboardButton("🗺 Маршрут от BEAR MODE", url=_customer_route_url(customer_map_link)),
+        ])
     # Keep cancellation visible at the top of a new order card.
     # Once cancelled, replace the action with a persistent status marker.
     if order["status"] == "cancelled":
