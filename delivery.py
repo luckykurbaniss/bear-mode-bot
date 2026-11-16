@@ -404,7 +404,7 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             await q.answer("Данные доставленного или отменённого заказа менять нельзя. Изменить можно только статус.", show_alert=True)
             return
         if field == "cancelled":
-            if order["status"] not in {"new", "confirmed", "cooking"}:
+            if order["status"] not in {"new", "confirmed", "cooking", "ready"}:
                 await q.answer("Заказ на этом этапе уже нельзя отменить из панели.", show_alert=True)
                 return
             _set_value(order_id, "status", "cancelled")
@@ -581,8 +581,8 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
             if current_grab != "requested":
                 await q.answer("Сначала отметьте, что Grab вызван.", show_alert=True)
                 return
-            if order["status"] not in {"confirmed", "cooking"}:
-                await q.answer("Передача курьеру на этом этапе недоступна.", show_alert=True)
+            if order["status"] != "ready":
+                await q.answer("Сначала отметьте статус «Готов».", show_alert=True)
                 return
         if action == "delivered" and not (
             current_grab == "picked_up" or order["status"] == "courier"
