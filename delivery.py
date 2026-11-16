@@ -101,6 +101,7 @@ def init_delivery_db():
             "grab_tracking_url": "TEXT",
             "payment_status": "TEXT NOT NULL DEFAULT 'unpaid'",
             "payment_method": "TEXT NOT NULL DEFAULT 'cash'",
+            "delivery_fee": "INTEGER NOT NULL DEFAULT 0",
         }
         for name, definition in additions.items():
             if name not in columns:
@@ -195,7 +196,9 @@ def _order_text(order):
         f"📍 Адрес: {order['address']}\n"
         f"📅 Дата доставки: {order['delivery_date'] or 'не указана'}\n"
         f"🍱 Заказ: {order['items_text']}\n"
-        f"💰 Итого к оплате: {order['total']:,} ₫\n"
+        f"💰 Сумма заказа: {order['total']:,} ₫\n"
+        f"🛵 Доставка: {(order['delivery_fee'] or 0):,} ₫\n"
+        f"💳 Всего с доставкой: {int(order['total']) + int(order['delivery_fee'] or 0):,} ₫\n"
         f"💳 Способ оплаты: {payment_method_label}\n"
         f"💵 Статус оплаты: {payment_status_label}\n"
         f"💬 Комментарий: {order['comment'] or 'Нет'}\n\n"
@@ -293,6 +296,13 @@ def _order_keyboard(order):
                 callback_data=f"adm:set:{order_id}:{status}",
             )
         ])
+        if status == "confirmed":
+            rows.append([
+                InlineKeyboardButton(
+                    ("✅ " if int(order["delivery_fee"] or 0) > 0 else "💰 ") + "Указать сумму доставки",
+                    callback_data=f"adm:fee:{order_id}",
+                )
+            ])
     rows.extend([
         [InlineKeyboardButton(("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
         [InlineKeyboardButton(("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
@@ -424,7 +434,26 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
         await q.answer("Нет доступа.", show_alert=True)
         return
     parts = q.data.split(":")
-    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference", "tracking", "edit"}:
+    if len(parts) < 3 or parts[1] not in {"order", "delivery", "set", "reference", "tracking", "edit", "fee"}:
+        return
+
+    if parts[1] == "fee":
+        order_id = int(parts[2])
+        order = _get_order(order_id)
+        if not order:
+            await q.answer("Заказ не найден.", show_alert=True)
+            return
+        prompt = await q.message.reply_text(
+            f"💰 Укажите стоимость доставки для заказа №{order_id} в VND (только число, например 25000)."
+        )
+        context.chat_data["pending_order_edit"] = {
+            "order_id": order_id,
+            "field": "delivery_fee",
+            "prompt_id": prompt.message_id,
+            "order_card_chat_id": q.message.chat_id,
+            "order_card_message_id": q.message.message_id,
+        }
+        await q.answer("Жду сумму доставки")
         return
 
     if parts[1] == "edit":
@@ -1003,6 +1032,15 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 raise ValueError("Нельзя указать дату в прошлом.")
             updates[field] = raw
             customer_notice = f"Дата доставки: {raw}"
+        elif field == "delivery_fee":
+            normalized = raw.replace(" ", "").replace(".", "").replace(",", "")
+            if not normalized.isdigit() or not 0 <= int(normalized) <= 5_000_000:
+                raise ValueError("Введите сумму от 0 до 5.000.000 VND, только цифрами.")
+            updates[field] = int(normalized)
+            customer_notice = (
+                f"Стоимость доставки: {int(normalized):,} ₫\n"
+                f"Итоговая сумма с доставкой: {int(order['total']) + int(normalized):,} ₫"
+            ).replace(",", ".")
         elif field == "comment":
             if raw == "—":
                 raw = ""
@@ -1034,7 +1072,7 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await message.reply_text(f"⚠️ {exc}\nПопробуйте ещё раз, ответив на исходное сообщение.")
         return
 
-    allowed_columns = {"customer_name", "phone", "address", "delivery_date", "comment", "items_text", "total", "payment_status"}
+    allowed_columns = {"customer_name", "phone", "address", "delivery_date", "comment", "items_text", "total", "payment_status", "delivery_fee"}
     if not updates or any(column not in allowed_columns for column in updates):
         await message.reply_text("Не удалось сохранить изменение.")
         return
