@@ -284,11 +284,11 @@ def _order_keyboard(order):
             )
         ])
     rows.extend([
-        [InlineKeyboardButton(("✅ " if ready_stage_reached and order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
-        [InlineKeyboardButton(("✅ " if show_progress and order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
-        [InlineKeyboardButton(("✅ " if ready_stage_reached and order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
-        [InlineKeyboardButton(("✅ " if courier_stage_reached and order["grab_status"] in {"picked_up", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
-        [InlineKeyboardButton(("✅ " if courier_stage_reached and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
+        [InlineKeyboardButton(("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID", callback_data=f"adm:reference:{order_id}")],
+        [InlineKeyboardButton(("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван", callback_data=f"adm:delivery:{order_id}:grab_requested")],
+        [InlineKeyboardButton(("✅ " if order["payment_status"] == "received" else "💵 ") + "Деньги получены", callback_data=f"adm:delivery:{order_id}:payment_received")],
+        [InlineKeyboardButton(("✅ " if order["grab_status"] in {"picked_up", "delivered"} else "🛵 ") + "Курьер забрал", callback_data=f"adm:delivery:{order_id}:picked_up")],
+        [InlineKeyboardButton(("✅ " if order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab", callback_data=f"adm:tracking:{order_id}")],
         [InlineKeyboardButton(("✅ " if show_progress and order["status"] == "delivered" else "🏡 ") + "Доставлен", callback_data=f"adm:delivery:{order_id}:delivered")],
         [InlineKeyboardButton("✏️ Изменить заказ", callback_data=f"adm:edit:{order_id}")],
         [InlineKeyboardButton("💬 Переписка", callback_data=f"support:history:{order_id}")],
@@ -357,23 +357,23 @@ def _order_status_keyboard(order):
 
     operational_actions = [
         (
-            ("✅ " if show_progress and order["grab_reference"] else "🧾 ") + "Указать Grab ID",
+            ("✅ " if order["grab_reference"] else "🧾 ") + "Указать Grab ID",
             f"adm:reference:{order_id}",
         ),
         (
-            ("✅ " if show_progress and order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван",
+            ("✅ " if order["grab_status"] in {"requested", "picked_up", "delivered"} else "🚚 ") + "Grab вызван",
             f"adm:delivery:{order_id}:grab_requested",
         ),
         (
-            ("✅ " if show_progress and order["payment_status"] == "received" else "💵 ") + "Деньги получены",
+            ("✅ " if order["payment_status"] == "received" else "💵 ") + "Деньги получены",
             f"adm:delivery:{order_id}:payment_received",
         ),
         (
-            ("✅ " if courier_stage_reached or (show_progress and order["grab_status"] in {"picked_up", "delivered"}) else "🛵 ") + "Курьер забрал",
+            ("✅ " if order["grab_status"] in {"picked_up", "delivered"} else "🛵 ") + "Курьер забрал",
             f"adm:delivery:{order_id}:picked_up",
         ),
         (
-            ("✅ " if show_progress and order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab",
+            ("✅ " if order["grab_tracking_url"] else "🔗 ") + "Ссылка отслеживания Grab",
             f"adm:tracking:{order_id}",
         ),
     ]
