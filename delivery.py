@@ -3,11 +3,6 @@ import logging
 import os
 import sqlite3
 import re
-import struct
-import zlib
-from io import BytesIO
-
-from telegram import InputFile
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 from urllib.parse import urlsplit
@@ -32,39 +27,6 @@ ORDER_STATUS_TRANSITIONS = {
     "cancelled": set(),
 }
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
-
-
-# Keep this matrix identical to PAYMENT_QR_BITS in index.html so the QR
-# sent after a delivery-fee update is the same Vietcombank QR shown at checkout.
-PAYMENT_QR_BITS = "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001111111001011011101110111011111110000000010000010101001101100011010100000100000000101110101100010101111111101011101000000001011101011100000000011101010111010000000010111010011001010010011010101110100000000100000100111000011100000101000001000000001111111010101010101010101011111110000000000000000100000000110000010000000000000000100000101101010100011101011001110000000000100010001111010100110100011101000000000010010110000110010011010010011101000000000000101000011001000000000100100110000000001101101100101111111001001111110000000000010101101001001101001100100010110000000000100000110010010000100100000110000000000001100000111111001001000101011000010000000010101111010010101110010111000000000000000110100010001110001000010110001101000000001001111100101010100111001011111100000000011110000111000001110000010101010000000000111110101010110110011110110100111000000001001010110001000101000100010000010000000010110110100001111100001100000100000000000100000001000010000001100001000110000000001111001100000111011110111111111010000000000000000110000011010101010001000100000000111111100011011000110001101010011000000001000001000010111100011001000101010000000010111010001100000011010111111100000000000101110100101101011001100100100100000000001011101001010100110001111110010110000000010000010001010011001000011100001000000000111111101100001001011101001001100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-
-def _png_chunk(kind, data):
-    payload = kind + data
-    return struct.pack(">I", len(data)) + payload + struct.pack(">I", zlib.crc32(payload) & 0xffffffff)
-
-def _payment_qr_png():
-    size = 41
-    if len(PAYMENT_QR_BITS) != size * size:
-        raise ValueError("Invalid checkout QR matrix")
-    scale, quiet = 8, 4
-    full = (size + quiet * 2) * scale
-    rows = []
-    for py in range(full):
-        module_y = py // scale - quiet
-        row = bytearray([0])
-        for px in range(full):
-            module_x = px // scale - quiet
-            black = (
-                0 <= module_x < size and 0 <= module_y < size
-                and PAYMENT_QR_BITS[module_y * size + module_x] == "1"
-            )
-            row.extend((0, 0, 0) if black else (255, 255, 255))
-        rows.append(bytes(row))
-    raw = b"".join(rows)
-    header = struct.pack(">2I", full, full) + bytes([8, 2, 0, 0, 0])
-    png = bytes([137, 80, 78, 71, 13, 10, 26, 10]) + _png_chunk(b"IHDR", header)
-    png += _png_chunk(b"IDAT", zlib.compress(raw, 9)) + _png_chunk(b"IEND", b"")
-    return BytesIO(png)
 
 
 def is_order_transition_allowed(current_status: str, next_status: str) -> bool:
@@ -213,16 +175,10 @@ def _order_text(order):
         "picked_up": "Курьер забрал", "delivered": "Доставлен",
     }.get(order["grab_status"] or "not_requested", "Неизвестно")
     payment_status = "Получена" if order["payment_status"] == "received" else "Ожидается"
-    payment_method = order["payment_method"] if "payment_method" in order.keys() else "cash"
-    payment_method_label = (
-        "Перевод по QR-коду Vietcombank" if payment_method == "qr"
-        else "Наличные при получении"
-    )
+    payment_method_label = "Наличные при получении"
     payment_status_label = (
-        "Клиент отметил оплату — проверить поступление"
-        if payment_method == "qr" and order["payment_status"] != "received"
-        else ("Оплачено / получено" if order["payment_status"] == "received"
-              else ("Ожидается при получении" if payment_method == "cash" else payment_status))
+        "Оплачено / получено" if order["payment_status"] == "received"
+        else "Оплата при получении"
     )
     return (
         f"🐻 ЗАКАЗ BEAR MODE №{order['id']}\n\n"
@@ -1175,25 +1131,10 @@ async def order_edit_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     if order["customer_chat_id"]:
         try:
-            if field == "delivery_fee" and order["payment_method"] == "qr":
-                fee_text = f"{int(updates['delivery_fee']):,}".replace(",", ".") + " ₫"
-                caption = (
-                    f"ℹ️ Заказ BEAR MODE №{order_id} обновлён.\n"
-                    f"Стоимость доставки: {fee_text}\n"
-                    "Оплатить по QR ниже:"
-                )
-                qr_photo = _payment_qr_png()
-                qr_photo.name = "bear-mode-vietcombank-qr.png"
-                await context.bot.send_photo(
-                    chat_id=order["customer_chat_id"],
-                    photo=InputFile(qr_photo, filename=qr_photo.name),
-                    caption=caption,
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=order["customer_chat_id"],
-                    text=f"ℹ️ Заказ BEAR MODE №{order_id} обновлён.\\n{customer_notice}",
-                )
+            await context.bot.send_message(
+                chat_id=order["customer_chat_id"],
+                text=f"ℹ️ Заказ BEAR MODE №{order_id} обновлён.\n{customer_notice}",
+            )
         except Exception:
             log.exception("Could not notify customer about edited order %s", order_id)
     updated = _get_order(order_id)
