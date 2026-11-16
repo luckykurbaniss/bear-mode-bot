@@ -199,7 +199,7 @@ def _order_keyboard(order):
     # arbitrary names have no equivalent native copy entity. Keep one
     # dedicated copy action attached to the order card (not in the status menu).
     rows = [[InlineKeyboardButton(
-        "📋 Скопировать имя",
+        "📋 Скопировать имя клиента",
         copy_text=CopyTextButton(text=str(order["customer_name"])),
     )]]
     # Keep cancellation visible at the top of a new order card.
