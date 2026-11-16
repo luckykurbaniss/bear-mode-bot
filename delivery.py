@@ -413,10 +413,11 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
                 try:
                     await context.bot.send_message(
                         chat_id=customer_chat_id,
-                        text="❌ К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+                        text="🐻 Ваш заказ отменён. До новых встреч и вкусных моментов вместе с BEAR MODE! 🐼",
                     )
+                    log.info("Cancellation notification sent: order_id=%s customer_chat_id=%s", order_id, customer_chat_id)
                 except Exception:
-                    log.exception("Could not notify customer about cancelled order")
+                    log.exception("Could not notify customer about cancelled order %s", order_id)
             order = _get_order(order_id)
             await q.edit_message_text(
                 _order_text(order),
@@ -596,12 +597,12 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
     if parts[1] == "set":
         status_messages = {
             "new": "Мы получили ваш заказ и скоро свяжемся с вами для подтверждения.",
-            "confirmed": "Ваш заказ подтверждён! Спасибо.",
-            "cooking": "🍳 Ваш заказ взят в работу и уже готовится на кухне.",
-            "ready": "🍱 Ваш заказ готов! Мишки всё проверили и аккуратно упаковали!",
-            "courier": "Ваш заказ передан курьеру и скоро будет у вас.",
-            "delivered": "Ваш заказ отмечен как доставленный. Приятного аппетита!",
-            "cancelled": "К сожалению, ваш заказ отменён. Если это ошибка, напишите нам @lucky_ranger.",
+            "confirmed": "🐻 Ура! Ваш заказ подтверждён! Мишки приступают к работе! ❤️",
+            "cooking": "🍳 Ваш заказ уже готовится! На медвежьей кухне всё кипит! 🐼",
+            "ready": "🍱 Ваш заказ готов! Мишки всё проверили и аккуратно упаковали! 🐾",
+            "courier": "🛵 Ваш заказ уже у курьера! Медвежьи вкусняшки едут к вам! 🍯",
+            "delivered": "🏡 Ваш заказ доставлен! Мишки желают вам приятного аппетита! 🥰",
+            "cancelled": "🐻 Ваш заказ отменён. До новых встреч и вкусных моментов вместе с BEAR MODE! 🐼",
         }
         if action not in status_messages:
             await q.answer("Неизвестный статус.", show_alert=True)
@@ -618,24 +619,35 @@ async def delivery_admin_callback(update: Update, context: ContextTypes.DEFAULT_
     elif action == "picked_up":
         _set_value(order_id, "grab_status", "picked_up")
         _set_value(order_id, "status", "courier")
-        notice = "🛵 Ваш заказ передан курьеру GrabExpress и скоро будет у вас."
+        notice = "🛵 Ваш заказ уже у курьера! Медвежьи вкусняшки едут к вам! 🍯"
     elif action == "payment_received":
         _set_value(order_id, "payment_status", "received")
     elif action == "delivered":
         _set_value(order_id, "grab_status", "delivered")
         _set_value(order_id, "status", "delivered")
-        notice = "🎉 Ваш заказ доставлен! Спасибо, что выбрали BEAR MODE."
+        notice = "🏡 Ваш заказ доставлен! Мишки желают вам приятного аппетита! 🥰"
 
-    if notice and order["customer_chat_id"]:
-        try:
-            await context.bot.send_message(chat_id=order["customer_chat_id"], text=notice)
-        except Exception:
-            log.exception("Could not notify customer about delivery update for order %s", order_id)
+    notification_error = False
+    if notice:
+        customer_chat_id = order["customer_chat_id"] if "customer_chat_id" in order.keys() else None
+        if not customer_chat_id:
+            notification_error = True
+            log.error("Cannot send order status notification: customer_chat_id is missing (order_id=%s, status=%s)", order_id, action)
+        else:
+            try:
+                await context.bot.send_message(chat_id=customer_chat_id, text=notice)
+                log.info("Order status notification sent: order_id=%s status=%s customer_chat_id=%s", order_id, action, customer_chat_id)
+            except Exception:
+                notification_error = True
+                log.exception("Could not notify customer about order status: order_id=%s status=%s customer_chat_id=%s", order_id, action, customer_chat_id)
 
     updated = _get_order(order_id)
     # Keep exactly one live order card: replace its text and keyboard in place.
     await q.message.edit_text(_order_text(updated), reply_markup=_order_keyboard(updated))
-    await q.answer("Карточка заказа обновлена")
+    await q.answer(
+        "Статус обновлён, но уведомление клиенту не отправлено. Проверьте Telegram клиента и журнал Railway."
+        if notification_error else "Статус обновлён"
+    )
 
 
 async def delivery_reference_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
