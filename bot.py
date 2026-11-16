@@ -1342,7 +1342,7 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, order_edit_message), group=-2)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, delivery_reference_message), group=-1)
     app.add_handler(CallbackQueryHandler(menu_callback, pattern=r"^(delivery|contact|home)$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, customer_message_handler), group=1)
+    # Route customer text before admin/order text handlers; the handler itself filters private customer chats.\n    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, customer_message_handler), group=-5)
     app.add_error_handler(telegram_error_handler)
 
     print("BEAR MODE: starting Telegram bot...", flush=True)
