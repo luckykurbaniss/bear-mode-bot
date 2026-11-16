@@ -506,11 +506,11 @@ async def customer_message_handler(update: Update, context: ContextTypes.DEFAULT
     order_label = f"Заказ №{order['id']}" if order else "Заказ не найден"
     username = f"@{user.username}" if user.username else f"Telegram ID {user.id}"
     alert = (
-        "💬 ВОПРОС КЛИЕНТА BEAR MODE\\n\\n"
-        f"👤 {user.full_name}\\n"
-        f"🔗 {username}\\n"
-        f"🧾 {order_label}\\n\\n"
-        f"Сообщение:\\n{message.text[:3000]}"
+        "💬 ВОПРОС КЛИЕНТА BEAR MODE\n\n"
+        f"👤 {user.full_name}\n"
+        f"🔗 {username}\n"
+        f"🧾 {order_label}\n\n"
+        f"Сообщение:\n{message.text[:3000]}"
     )
     keyboard = InlineKeyboardMarkup([[
         InlineKeyboardButton(
