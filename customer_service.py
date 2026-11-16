@@ -50,7 +50,6 @@ SET_DETAILS = {
 
 TEMPLATES = {
     "welcome_confirm": ("Приветствие и подтверждение", "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE"),
-    "welcome_confirm_qr": ("Приветствие и подтверждение — QR", "Добрый день! 🐻\n\n🐼 Спасибо за заказ в BEAR MODE"),
     "prices": ("Отправить меню и цены", MENU_TEXT),
     "delivery": ("Условия доставки", "Напишите, пожалуйста, ваш адрес доставки — мы согласуем детали доставки 😊"),
     "payment": ("Способы оплаты", "Оплатить заказ можно наличными или переводом. Какой способ вам удобнее? 😊"),
@@ -71,7 +70,7 @@ TEMPLATES = {
 }
 
 CATEGORIES = {
-    "start": ("👋 Приветствие и подтверждение", ["welcome_confirm", "welcome_confirm_qr"]),
+    "start": ("👋 Приветствие и подтверждение", ["welcome_confirm"]),
     "menu": ("🍱 Меню и цены", ["prices", "total"]),
     "delivery": ("🚚 Доставка", ["delivery", "delay"]),
     "payment": ("💵 Оплата", ["payment"]),
@@ -214,7 +213,7 @@ async def send_order_welcome(bot, order_id):
     if not order or not order["customer_chat_id"]:
         log.warning("Cannot send order welcome: order %s has no customer chat", order_id)
         return
-    template_id = "welcome_confirm_qr" if order["payment_method"] == "qr" else "welcome_confirm"
+    template_id = "welcome_confirm"
     await bot.send_message(
         chat_id=int(order["customer_chat_id"]),
         text=_format_template(template_id, order),
@@ -281,15 +280,11 @@ def support_order_button(order_id):
 
 def _format_template(template_id, order):
     text = TEMPLATES[template_id][1]
-    if order and template_id in {"welcome_confirm", "welcome_confirm_qr"}:
+    if order and template_id == "welcome_confirm":
         total = f"{int(order['total']):,}".replace(",", ".") + " ₫"
         items = (order["items_text"] or "Состав заказа не указан").strip()
         address = (order["address"] or "Адрес не указан").strip()
-        payment_line = (
-            "💳 Оплата: перевод по QR-коду Vietcombank"
-            if template_id == "welcome_confirm_qr"
-            else "💵 Оплата: при получении"
-        )
+        payment_line = "💵 Оплата: при получении"
         # Keep the exact delivery address and item list from the order.
         text = (
             "🐻 Топ-топ! Медвежья доставка на связи! 🐼\n\n"
@@ -433,7 +428,7 @@ async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent = await context.bot.send_message(
                 chat_id=int(draft["chat_id"]),
                 text=draft["text"].strip(),
-                reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") in {"welcome_confirm", "welcome_confirm_qr"} else None),
+                reply_markup=(_customer_order_confirmation_keyboard(int(draft["order_id"])) if draft.get("order_id") and draft.get("template_id") == "welcome_confirm" else None),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         except Exception as exc:
