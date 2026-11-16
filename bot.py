@@ -72,6 +72,64 @@ def google_maps_route_url(customer_map_link: str) -> str:
     )
 
 
+
+async def estimate_customer_route(customer_map_link: str):
+    """Estimate driving distance from a validated Google Maps share link."""
+    timeout = aiohttp.ClientTimeout(total=10, connect=4)
+    current_url = customer_map_link
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, headers={"User-Agent": "BEAR-MODE-delivery-estimator/1.0"}) as session:
+            for _ in range(6):
+                parsed = urlsplit(current_url)
+                host = (parsed.hostname or "").lower()
+                if parsed.scheme != "https" or not (host in GOOGLE_MAPS_HOSTS or host.endswith(".google.com")):
+                    return None
+                async with session.get(current_url, allow_redirects=False) as response:
+                    if response.status in {301, 302, 303, 307, 308}:
+                        location = response.headers.get("Location")
+                        if not location:
+                            return None
+                        from urllib.parse import urljoin
+                        current_url = urljoin(current_url, location)
+                        continue
+                    break
+            else:
+                return None
+
+            patterns = (
+                r"@(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)",
+                r"!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)",
+                r"[?&](?:q|query|destination)=(-?\d{1,2}\.\d+)%2C(-?\d{1,3}\.\d+)",
+            )
+            coords = None
+            for pattern in patterns:
+                match = re.search(pattern, current_url, re.IGNORECASE)
+                if match:
+                    coords = (float(match.group(1)), float(match.group(2)))
+                    break
+            if coords is None:
+                return None
+            lat, lon = coords
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                return None
+            pickup_lat, pickup_lon = (float(x) for x in BEAR_MODE_PICKUP_COORDS.split(","))
+            route_url = f"https://router.project-osrm.org/route/v1/driving/{pickup_lon},{pickup_lat};{lon},{lat}?overview=false"
+            async with session.get(route_url) as response:
+                if response.status != 200:
+                    return None
+                payload = await response.json()
+            routes = payload.get("routes") or []
+            if not routes:
+                return None
+            route = routes[0]
+            km = route["distance"] / 1000
+            minutes = max(1, round(route["duration"] / 60))
+            return f"🛣 Примерный маршрут: {km:.1f} км · около {minutes} мин. на авто (оценка)"
+    except Exception:
+        log.warning("Could not estimate customer route from Google Maps link", exc_info=True)
+        return None
+
+
 SETS = {
     "1": {
         "name": "Энергия",
@@ -1122,6 +1180,8 @@ async def _order_api_unlocked(request):
         customer_name = str(order.get("customer_name", "")).strip()
         phone = str(order.get("phone", "")).strip()
         address = str(order.get("address", "")).strip()
+        address = validate_customer_map_link(address)
+        route_estimate = await estimate_customer_route(address)
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
         submission_id = str(order.get("submission_id", "")).strip()
@@ -1222,7 +1282,9 @@ async def _order_api_unlocked(request):
             f"🧾 НОВЫЙ ЗАКАЗ №{order_id}\n\n" + "\n".join(lines)
             + f"\n💰 ИТОГО К ОПЛАТЕ: {total:,} ₫".replace(",", ".")
             + f"\n\n👤 Имя: {customer_name}\n📱 Телефон: {phone}"
-            + f"\n📍 Адрес: {address}\n📅 Дата доставки: {delivery_date}"
+            + f"\n📍 Адрес: {address}"
+            + (f"\n{route_estimate}" if route_estimate else "\n🛣 Расстояние: не удалось определить по ссылке — проверьте маршрут вручную.")
+            + f"\n📅 Дата доставки: {delivery_date}"
             + f"\n💳 Способ оплаты: {payment_method_label}"
             + f"\n💰 Статус оплаты: {payment_status_label}"
             + f"\n💬 Комментарий: {comment or 'Нет'}"
@@ -1231,9 +1293,13 @@ async def _order_api_unlocked(request):
         try:
             await request.app["bot"].send_message(
                 chat_id=int(ADMIN_CHAT_ID), text=admin_text,
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
-                ]])
+                reply_markup=InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("📍 Открыть адрес клиента", url=address),
+                        InlineKeyboardButton("🗺 Маршрут от BEAR MODE", url=google_maps_route_url(address)),
+                    ],
+                    [InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]
+                ])
             )
             with db_connect() as conn:
                 conn.execute("UPDATE orders SET admin_notified = 1 WHERE id = ?", (order_id,))
