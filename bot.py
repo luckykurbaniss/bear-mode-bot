@@ -7,7 +7,7 @@ import sqlite3
 import hashlib
 import hmac
 import time
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote, urlsplit
 from aiohttp import web
 
 from datetime import datetime, date
@@ -40,6 +40,37 @@ API_PORT = int(os.getenv("PORT", "80"))  # Use the public port assigned by HOKAS
 ALLOWED_WEB_ORIGIN = "https://luckykurbaniss.github.io"
 DB_PATH = os.getenv("DB_PATH", "bear_mode.db").strip()
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
+
+BEAR_MODE_PICKUP_COORDS = "12.248668,109.193710"
+GOOGLE_MAPS_HOSTS = {"maps.app.goo.gl", "goo.gl", "google.com", "www.google.com", "maps.google.com"}
+
+
+def validate_customer_map_link(value: str) -> str:
+    """Accept only HTTPS Google Maps share or place links."""
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").lower()
+    valid_host = host in GOOGLE_MAPS_HOSTS or host.endswith(".google.com")
+    valid_path = (
+        host == "maps.app.goo.gl"
+        or host == "goo.gl" and parsed.path.startswith("/maps")
+        or host.endswith("google.com") and (
+            "/maps" in parsed.path or parsed.path.startswith("/url")
+        )
+    )
+    if parsed.scheme != "https" or not valid_host or not valid_path:
+        raise ValueError("Укажите ссылку Google Maps через «Поделиться» → «Копировать ссылку».")
+    return value
+
+
+def google_maps_route_url(customer_map_link: str) -> str:
+    """Build a Google Maps driving-directions link from the BEAR MODE pickup."""
+    return (
+        "https://www.google.com/maps/dir/?api=1"
+        f"&origin={quote(BEAR_MODE_PICKUP_COORDS, safe=',')}"
+        f"&destination={quote(customer_map_link, safe='')}"
+        "&travelmode=driving"
+    )
+
 
 SETS = {
     "1": {
@@ -889,6 +920,7 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         customer_name = str(order.get("customer_name", "")).strip()
         phone = str(order.get("phone", "")).strip()
         address = str(order.get("address", "")).strip()
+        address = validate_customer_map_link(address)
         delivery_date = str(order.get("delivery_date", "")).strip()
         comment = str(order.get("comment", "")).strip()
         submission_id = str(order.get("submission_id", "")).strip()
@@ -1011,9 +1043,13 @@ async def receive_web_app_order(update: Update, context: ContextTypes.DEFAULT_TY
         await context.bot.send_message(
             chat_id=int(ADMIN_CHAT_ID),
             text=admin_text,
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")
-            ]])
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("📍 Открыть адрес клиента", url=address),
+                    InlineKeyboardButton("🗺 Маршрут от BEAR MODE", url=google_maps_route_url(address)),
+                ],
+                [InlineKeyboardButton("📂 Открыть заказ в панели", callback_data=f"adm:order:{order_id}")]
+            ])
         )
         with db_connect() as conn:
             conn.execute("UPDATE orders SET admin_notified = 1 WHERE id = ?", (order_id,))
