@@ -190,7 +190,7 @@ def _order_conversation_text(order_id):
         lines.append(f"{labels.get(row['direction'], 'Сообщение')} · {stamp}")
         lines.append(row["body"])
         lines.append("")
-    result = "\\n".join(lines).strip()
+    result = "\n".join(lines).strip()
     return result[-3900:]
 
 
