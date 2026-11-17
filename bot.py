@@ -22,6 +22,7 @@ from telegram.ext import (
 )
 from delivery import init_delivery_db, delivery_admin_callback, delivery_reference_message, order_edit_message
 from customer_service import support_callback, support_reply_message, customer_message_handler, customer_order_confirmation_callback, send_order_welcome
+from media_storage import admin_media_upload
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -1325,6 +1326,8 @@ async def main():
     app.add_handler(CallbackQueryHandler(delivery_admin_callback, pattern=r"^adm:(order|delivery|set|reference|tracking|edit|fee):"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
+    # Admin-only photo uploads are stored in S3 and returned as temporary Instagram-ready URLs.
+    app.add_handler(MessageHandler((filters.PHOTO | filters.Document.IMAGE) & filters.ChatType.PRIVATE, admin_media_upload), group=-4)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, support_reply_message), group=-3)
     # Catch Telegram's native edited-message updates as well as newly sent replies.
     app.add_handler(MessageHandler(filters.TEXT & filters.UpdateType.EDITED_MESSAGE, support_reply_message), group=-3)
