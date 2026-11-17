@@ -133,7 +133,7 @@ function render(){
  $('products').innerHTML=sets.map((s,i)=>`<article class="card"><div class="card-photo"><img src="${s.photo}" alt="${s.name}" loading="${i===0?'eager':'lazy'}" decoding="async"></div><div class="card-body"><h3>${s.tag}</h3><div class="desc">${s.items.map(x=>x[0]).join(' · ')}</div><div class="price">${money(PRICE)}</div><button class="btn" onclick="add('set_${s.id}')">＋ Добавить в корзину</button></div></article>`).join('');
  $('ingredients').innerHTML=dishes.map(d=>`<div class="ingredient"><img src="${d.photo}" alt="${d.name}" loading="lazy" decoding="async"><span>${d.name}<br><b style="color:var(--gold)">${money(d.price)}</b><button class="btn" style="padding:7px 4px;margin-top:6px;font-size:10px" onclick="add('${d.id}')">＋ Добавить</button></span></div>`).join('');
 }
-function add(id){cart[id]=(cart[id]||0)+1;update();toast('Добавлено в корзину 🐼')}
+function add(id){cart[id]=(cart[id]||0)+1;update();trackAnalytics('add_to_cart');toast('Добавлено в корзину 🐼')}
 function change(id,d){cart[id]=(cart[id]||0)+d;if(cart[id]<=0)delete cart[id];update()}
 function update(){
  // Keep basket contents when the Telegram Mini App is closed and reopened.
@@ -155,10 +155,18 @@ $('toastClose').onclick=hideToast;
 
 $('toast').addEventListener('touchstart',e=>{const p=e.touches[0];toastStartX=p.clientX;toastStartY=p.clientY},{passive:true});
 $('toast').addEventListener('touchend',e=>{const p=e.changedTouches[0];if(Math.abs(p.clientX-toastStartX)>35||Math.abs(p.clientY-toastStartY)>35)hideToast()},{passive:true});
-$('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
+$('openCart').onclick=()=>{if(!Object.keys(cart).length)return toast('Сначала добавь сет в корзину');trackAnalytics('checkout_open');$('overlay').classList.add('show')};$('close').onclick=()=>$('overlay').classList.remove('show');$('overlay').onclick=e=>{if(e.target===$('overlay'))$('overlay').classList.remove('show')};
 let today=new Date(),local=new Date(today.getTime()-today.getTimezoneOffset()*60000).toISOString().slice(0,10);$('date').min=local;$('date').value=local;
 let orderSubmitting=false;
 const ORDER_API_URL='https://bear-mode-bot-production.up.railway.app/api/orders';
+const ANALYTICS_API_URL='https://bear-mode-bot-production.up.railway.app/api/analytics';
+function trackAnalytics(event){
+ const initData=tg?.initData||'';
+ if(!initData)return;
+ try{
+  fetch(ANALYTICS_API_URL,{method:'POST',headers:{'Content-Type':'application/json','X-Telegram-Init-Data':initData},body:JSON.stringify({event}),credentials:'omit',cache:'no-store',keepalive:true}).catch(()=>{});
+ }catch(_){}
+}
 const PENDING_SUBMISSION_KEY='bear_mode_pending_submission_v1';
 function makeSubmissionId(){
  if(window.crypto?.randomUUID)return window.crypto.randomUUID().replaceAll('-','');
@@ -245,6 +253,7 @@ $('orderForm').onsubmit=async e=>{
  }
 };
 render();update();
+trackAnalytics('shop_open');
 
 if('serviceWorker' in navigator && location.protocol==='https:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}),{once:true})}
 
