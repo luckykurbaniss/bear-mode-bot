@@ -17,8 +17,6 @@ log = logging.getLogger(__name__)
 
 MAX_IMAGE_BYTES = 15 * 1024 * 1024
 URL_TTL_SECONDS = 7 * 24 * 60 * 60
-ALLOWED_MIME_TYPES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
-
 
 def _s3_client():
     required = (
@@ -54,16 +52,20 @@ async def admin_media_upload(update, context):
     if not user or not admin_chat_id or str(user.id) != admin_chat_id:
         return
 
-    if not message or not message.photo:
+    if not message:
         return
-
-    photo = message.photo[-1]
-    if photo.file_size and photo.file_size > MAX_IMAGE_BYTES:
+    telegram_media = message.photo[-1] if message.photo else message.document
+    if not telegram_media:
+        return
+    if message.document and (message.document.mime_type or "").lower() not in {"image/jpeg", "image/png", "image/webp"}:
+        await message.reply_text("⚠️ Пришлите изображение в формате JPG, PNG или WebP.")
+        return
+    if telegram_media.file_size and telegram_media.file_size > MAX_IMAGE_BYTES:
         await message.reply_text("⚠️ Изображение больше 15 МБ. Отправьте файл меньшего размера.")
         return
 
     try:
-        telegram_file = await context.bot.get_file(photo.file_id)
+        telegram_file = await context.bot.get_file(telegram_media.file_id)
         image_bytes = bytes(await telegram_file.download_as_bytearray())
         if not image_bytes or len(image_bytes) > MAX_IMAGE_BYTES:
             await message.reply_text("⚠️ Не удалось принять изображение: допустимый размер — до 15 МБ.")
