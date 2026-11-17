@@ -1327,7 +1327,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(admin_callback, pattern=r"^adm:"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, receive_web_app_order))
     # Admin-only photo uploads are stored in S3 and returned as temporary Instagram-ready URLs.
-    app.add_handler(MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, admin_media_upload), group=-4)
+    app.add_handler(MessageHandler((filters.PHOTO | filters.Document.IMAGE) & filters.ChatType.PRIVATE, admin_media_upload), group=-4)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, support_reply_message), group=-3)
     # Catch Telegram's native edited-message updates as well as newly sent replies.
     app.add_handler(MessageHandler(filters.TEXT & filters.UpdateType.EDITED_MESSAGE, support_reply_message), group=-3)
