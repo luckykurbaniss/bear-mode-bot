@@ -121,7 +121,7 @@ const dishes=[
 {id:'egg',name:'Яйцо отварное',price:15000,photo:'assets/boiled-egg.jpg'},
 
 {id:'mors',name:'Морс',price:15000,photo:'assets/mors.jpg'},
-{id:'tomato_juice',name:'Томатный сок',price:15000,photo:'assets/tomato-juice-v2.jpg'},
+{id:'tomato_juice',name:'Томатный сок',price:15000,photo:'assets/tomato-juice-original.jpg'},
 {id:'baguette',name:'Багет',price:15000,photo:'assets/baguette.jpg'}
 ];
 const catalog=[...sets.map(s=>({id:'set_'+s.id,name:s.tag+' — '+s.name,price:PRICE,kind:'set',composition:s.items})),...dishes.map(d=>({...d,kind:'dish'}))];
