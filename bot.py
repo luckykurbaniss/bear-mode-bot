@@ -233,6 +233,16 @@ def init_db():
             conn.execute("UPDATE orders SET delivery_fee = 0 WHERE delivery_fee > 0")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS analytics_users (
+            user_key TEXT PRIMARY KEY, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+            start_count INTEGER NOT NULL DEFAULT 0, shop_open_count INTEGER NOT NULL DEFAULT 0
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS analytics_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_key TEXT NOT NULL,
+            event_name TEXT NOT NULL, created_at TEXT NOT NULL
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_date ON analytics_events(created_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_analytics_events_name_date ON analytics_events(event_name, created_at)")
         # Keep the legacy table available for safe migration on both old
         # and brand-new databases.
         conn.execute("""CREATE TABLE IF NOT EXISTS shop_reminders (
@@ -305,6 +315,53 @@ def get_orders(status="all", limit=8, offset=0):
                                 (status, limit, offset)).fetchall()
         return conn.execute("SELECT * FROM orders ORDER BY id DESC LIMIT ? OFFSET ?",
                             (limit, offset)).fetchall()
+
+
+def analytics_user_key(telegram_user_id):
+    return hmac.new(BOT_TOKEN.encode(), f"analytics:{telegram_user_id}".encode(), hashlib.sha256).hexdigest()
+
+
+def track_analytics_event(telegram_user_id, event_name):
+    allowed = {"start", "shop_open", "add_to_cart", "checkout_open", "order_created"}
+    if event_name not in allowed or not telegram_user_id:
+        return
+    now = datetime.now(VN_TZ).isoformat(timespec="seconds")
+    user_key = analytics_user_key(telegram_user_id)
+    with db_connect() as conn:
+        conn.execute(
+            """INSERT INTO analytics_users(user_key, first_seen, last_seen, start_count, shop_open_count)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(user_key) DO UPDATE SET last_seen=excluded.last_seen,
+                 start_count=analytics_users.start_count + excluded.start_count,
+                 shop_open_count=analytics_users.shop_open_count + excluded.shop_open_count""",
+            (user_key, now, now, int(event_name == "start"), int(event_name == "shop_open"))
+        )
+        conn.execute("INSERT INTO analytics_events(user_key, event_name, created_at) VALUES (?, ?, ?)",
+                     (user_key, event_name, now))
+
+
+def get_traffic_stats():
+    today = datetime.now(VN_TZ).date().isoformat()
+    week_start = (datetime.now(VN_TZ).date() - __import__("datetime").timedelta(days=6)).isoformat()
+    with db_connect() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM analytics_users").fetchone()[0]
+        today_new = conn.execute("SELECT COUNT(*) FROM analytics_users WHERE substr(first_seen,1,10)=?", (today,)).fetchone()[0]
+        returning = conn.execute("SELECT COUNT(*) FROM analytics_users WHERE substr(first_seen,1,10)<? AND substr(last_seen,1,10)=?", (today,today)).fetchone()[0]
+        def count_event(name):
+            return conn.execute("SELECT COUNT(*) FROM analytics_events WHERE event_name=? AND substr(created_at,1,10)=?", (name,today)).fetchone()[0]
+        daily = conn.execute(
+            """SELECT substr(created_at,1,10) AS day,
+                      COUNT(DISTINCT CASE WHEN event_name IN ('start','shop_open') THEN user_key END) AS visitors,
+                      SUM(CASE WHEN event_name='shop_open' THEN 1 ELSE 0 END) AS shops,
+                      SUM(CASE WHEN event_name='order_created' THEN 1 ELSE 0 END) AS orders
+               FROM analytics_events WHERE substr(created_at,1,10)>=?
+               GROUP BY substr(created_at,1,10) ORDER BY day DESC""", (week_start,)
+        ).fetchall()
+    daily_text = "\n".join(f"  {r['day']}: {r['visitors']} чел. · магазин {r['shops']} · заказов {r['orders']}" for r in daily) or "  Пока нет данных"
+    return {"total":total,"today_new":today_new,"returning":returning,
+            "starts":count_event("start"),"shops":count_event("shop_open"),
+            "cart":count_event("add_to_cart"),"checkout":count_event("checkout_open"),
+            "orders":count_event("order_created"),"daily":daily_text}
 
 
 def get_order_stats():
@@ -421,13 +478,27 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("Заказы удалены")
     elif parts[1] == "stats":
         total, today_count, today_revenue, revenue, new_count = get_order_stats()
+        traffic = get_traffic_stats()
         text = ("📊 *СТАТИСТИКА BEAR MODE*\n\n"
-                f"🧾 Всего заказов: *{total}*\n"
-                f"🆕 Новых: *{new_count}*\n"
-                f"📅 Заказов сегодня: *{today_count}*\n"
-                f"💵 Сумма заказов сегодня: *{today_revenue:,} ₫*\n"
-                f"💰 Выручка по подтверждённым: *{revenue:,} ₫*\n\n"
-                "_В выручку включены подтверждённые, готовящиеся, переданные курьеру и доставленные заказы._").replace(",", ".")
+                "*👥 ПОСЕЩЕНИЯ*\n"
+                f"Всего посетителей: *{traffic['total']}*\n"
+                f"Новых сегодня: *{traffic['today_new']}*\n"
+                f"Вернулись сегодня: *{traffic['returning']}*\n"
+                f"Запусков бота сегодня: *{traffic['starts']}*\n\n"
+                "*🛍 МАГАЗИН И ВОРОНКА СЕГОДНЯ*\n"
+                f"Открытий магазина: *{traffic['shops']}*\n"
+                f"Добавлений в корзину: *{traffic['cart']}*\n"
+                f"Открытий оформления: *{traffic['checkout']}*\n"
+                f"Заказов через магазин: *{traffic['orders']}*\n\n"
+                "*📈 ПОСЛЕДНИЕ 7 ДНЕЙ*\n"
+                f"{traffic['daily']}\n\n"
+                "*💵 ПРОДАЖИ*\n"
+                f"Всего заказов: *{total}*\n"
+                f"Новых заказов: *{new_count}*\n"
+                f"Заказов сегодня: *{today_count}*\n"
+                f"Сумма заказов сегодня: *{today_revenue:,} ₫*\n"
+                f"Выручка по подтверждённым: *{revenue:,} ₫*\n\n"
+                "_Учитываются уникальные Telegram-аккаунты. Сбор начинается после установки этой версии._").replace(",", ".")
         await q.edit_message_text(text, parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ В меню", callback_data="adm:home")]]))
         await q.answer()
@@ -534,6 +605,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["last_start_update_id"] = update_id
         log.info("Received /start: chat_id=%s user_id=%s update_id=%s",
                  chat_id, update.effective_user.id if update.effective_user else None, update_id)
+        if update.effective_user and str(update.effective_user.id) != ADMIN_CHAT_ID:
+            track_analytics_event(update.effective_user.id, "start")
         context.user_data.clear()
 
         # Keep the previous conversation visible. /start appends a fresh
@@ -1054,6 +1127,31 @@ async def health_api(request):
     return web.json_response({"ok": True, "service": "BEAR MODE order API", "port": API_PORT})
 
 
+async def analytics_api(request):
+    headers = {"Access-Control-Allow-Origin": ALLOWED_WEB_ORIGIN,
+               "Access-Control-Allow-Methods": "POST, OPTIONS",
+               "Access-Control-Allow-Headers": "Content-Type, X-Telegram-Init-Data", "Vary": "Origin"}
+    if request.method == "OPTIONS":
+        return web.Response(status=204, headers=headers)
+    if request.headers.get("Origin") != ALLOWED_WEB_ORIGIN:
+        return web.json_response({"ok": False}, status=403, headers=headers)
+    try:
+        user = validate_telegram_init_data(request.headers.get("X-Telegram-Init-Data", ""))
+        if str(user["id"]) == ADMIN_CHAT_ID:
+            return web.json_response({"ok": True}, headers=headers)
+        body = await request.json()
+        event_name = str(body.get("event", "")).strip() if isinstance(body, dict) else ""
+        if event_name not in {"shop_open", "add_to_cart", "checkout_open"}:
+            return web.json_response({"ok": False}, status=400, headers=headers)
+        track_analytics_event(user["id"], event_name)
+        return web.json_response({"ok": True}, headers=headers)
+    except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return web.json_response({"ok": False}, status=400, headers=headers)
+    except Exception:
+        log.exception("Analytics API failed")
+        return web.json_response({"ok": False}, status=500, headers=headers)
+
+
 async def _order_api_unlocked(request):
     if request.method == "OPTIONS":
         return web.Response(status=204, headers={
@@ -1305,6 +1403,7 @@ async def main():
     api["bot"] = app.bot
     api["order_lock"] = asyncio.Lock()
     api.router.add_get("/health", health_api)
+    api.router.add_route("*", "/api/analytics", analytics_api)
     api.router.add_post("/api/orders", order_api)
     api.router.add_options("/api/orders", order_api)
     api_runner = web.AppRunner(api, access_log=None)
