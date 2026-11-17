@@ -347,8 +347,13 @@ def get_traffic_stats():
         total = conn.execute("SELECT COUNT(*) FROM analytics_users").fetchone()[0]
         today_new = conn.execute("SELECT COUNT(*) FROM analytics_users WHERE substr(first_seen,1,10)=?", (today,)).fetchone()[0]
         returning = conn.execute("SELECT COUNT(*) FROM analytics_users WHERE substr(first_seen,1,10)<? AND substr(last_seen,1,10)=?", (today,today)).fetchone()[0]
-        def count_event(name):
-            return conn.execute("SELECT COUNT(*) FROM analytics_events WHERE event_name=? AND substr(created_at,1,10)=?", (name,today)).fetchone()[0]
+        event_counts = {
+            name: conn.execute(
+                "SELECT COUNT(*) FROM analytics_events WHERE event_name=? AND substr(created_at,1,10)=?",
+                (name, today)
+            ).fetchone()[0]
+            for name in ("start", "shop_open", "add_to_cart", "checkout_open", "order_created")
+        }
         daily = conn.execute(
             """SELECT substr(created_at,1,10) AS day,
                       COUNT(DISTINCT CASE WHEN event_name IN ('start','shop_open') THEN user_key END) AS visitors,
@@ -359,9 +364,9 @@ def get_traffic_stats():
         ).fetchall()
     daily_text = "\n".join(f"  {r['day']}: {r['visitors']} чел. · магазин {r['shops']} · заказов {r['orders']}" for r in daily) or "  Пока нет данных"
     return {"total":total,"today_new":today_new,"returning":returning,
-            "starts":count_event("start"),"shops":count_event("shop_open"),
-            "cart":count_event("add_to_cart"),"checkout":count_event("checkout_open"),
-            "orders":count_event("order_created"),"daily":daily_text}
+            "starts":event_counts["start"],"shops":event_counts["shop_open"],
+            "cart":event_counts["add_to_cart"],"checkout":event_counts["checkout_open"],
+            "orders":event_counts["order_created"],"daily":daily_text}
 
 
 def get_order_stats():
