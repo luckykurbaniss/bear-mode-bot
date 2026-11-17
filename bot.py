@@ -10,7 +10,7 @@ import time
 from urllib.parse import parse_qsl
 from aiohttp import web
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from telegram import (
@@ -342,7 +342,7 @@ def track_analytics_event(telegram_user_id, event_name):
 
 def get_traffic_stats():
     today = datetime.now(VN_TZ).date().isoformat()
-    week_start = (datetime.now(VN_TZ).date() - __import__("datetime").timedelta(days=6)).isoformat()
+    week_start = (datetime.now(VN_TZ).date() - timedelta(days=6)).isoformat()
     with db_connect() as conn:
         total = conn.execute("SELECT COUNT(*) FROM analytics_users").fetchone()[0]
         today_new = conn.execute("SELECT COUNT(*) FROM analytics_users WHERE substr(first_seen,1,10)=?", (today,)).fetchone()[0]
@@ -1285,6 +1285,7 @@ async def _order_api_unlocked(request):
         except Exception:
             delete_order(order_id)
             raise
+        track_analytics_event(user["id"], "order_created")
         try:
             await send_order_welcome(request.app["bot"], order_id)
         except Exception:
